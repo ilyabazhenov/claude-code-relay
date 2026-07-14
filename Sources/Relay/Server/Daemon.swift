@@ -409,8 +409,17 @@ final class Daemon: ObservableObject {
     private func authenticated(_ request: HTTPRequest) -> Bool {
         guard !config.secret.isEmpty else { return false }
         let provided = request.headers["x-relay-secret"] ?? ""
-        // Constant-time-ish comparison.
-        return provided.count == config.secret.count &&
-            provided == config.secret
+        return Self.constantTimeEquals(provided, config.secret)
+    }
+
+    /// Compare two strings without an early byte-by-byte exit, so a mismatch's position
+    /// can't be inferred from timing. The length check only leaks the length, which for
+    /// our fixed 64-hex-char secret is not sensitive.
+    private static func constantTimeEquals(_ a: String, _ b: String) -> Bool {
+        let lhs = Array(a.utf8), rhs = Array(b.utf8)
+        guard lhs.count == rhs.count else { return false }
+        var diff: UInt8 = 0
+        for i in lhs.indices { diff |= lhs[i] ^ rhs[i] }
+        return diff == 0
     }
 }

@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var language: AppLanguage = .system
     @State private var menuBarDisplay: MenuBarUsageDisplay = .both
     @State private var menuBarShowPercent = true
+    @State private var usageTracking = true
     @State private var savedNote = false
     @State private var hooksInstalled = false
     @State private var hookNote: String?
@@ -97,6 +98,8 @@ struct SettingsView: View {
                     editorField(text: $dangerRulesText, height: 120, enabled: approvalsEnabled)
                 } header: {
                     Text(loc.sectionDangerRules)
+                } footer: {
+                    Text(loc.dangerRulesHint)
                 }
 
                 Section {
@@ -113,12 +116,17 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle(loc.usageTracking, isOn: $usageTracking)
+                    hint(loc.usageTrackingHint)
+                    Divider()
                     Picker(loc.menuBarShows, selection: $menuBarDisplay) {
                         Text(loc.usageShowBoth).tag(MenuBarUsageDisplay.both)
                         Text(loc.usageShowFiveHour).tag(MenuBarUsageDisplay.fiveHour)
                         Text(loc.usageShowWeekly).tag(MenuBarUsageDisplay.weekly)
                     }
+                    .disabled(!usageTracking)
                     Toggle(loc.showPercentSign, isOn: $menuBarShowPercent)
+                        .disabled(!usageTracking)
                 } header: {
                     Text(loc.sectionUsageLimits)
                 } footer: {
@@ -210,6 +218,7 @@ struct SettingsView: View {
         language = c.effectiveLanguage
         menuBarDisplay = c.effectiveMenuBarUsageDisplay
         menuBarShowPercent = c.effectiveMenuBarShowPercent
+        usageTracking = c.effectiveUsageProxyEnabled
         Localization.shared.apply(language)
         savedNote = false
         hooksInstalled = HooksInstaller.isInstalled()
@@ -285,6 +294,7 @@ struct SettingsView: View {
             c.language = language.rawValue
             c.menuBarUsageDisplay = menuBarDisplay.rawValue
             c.menuBarShowPercent = menuBarShowPercent
+            c.usageProxyEnabled = usageTracking
             if let port { c.port = port }
         }
         savedNote = true

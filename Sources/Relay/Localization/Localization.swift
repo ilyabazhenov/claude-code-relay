@@ -168,6 +168,8 @@ final class Localization: ObservableObject {
 
     var sectionDangerRules: String { s("Dangerous command rules (one per line)",
                                        "Правила опасных команд (по одному на строку)") }
+    var dangerRulesHint: String { s("Clearing this field keeps your current rules — turn off approvals above to disable the gate.",
+                                    "Очистка поля сохраняет текущие правила — чтобы отключить перехват, выключите подтверждения выше.") }
     var sectionQuickReplies: String { s("Quick replies (one per line)",
                                         "Быстрые ответы (по одному на строку)") }
 
@@ -176,6 +178,9 @@ final class Localization: ObservableObject {
     var replyNotifications: String { s("Reply notifications", "Уведомления об ответах") }
 
     var sectionUsageLimits: String { s("Usage limits", "Лимиты использования") }
+    var usageTracking: String { s("Track usage limits", "Отслеживать лимиты") }
+    var usageTrackingHint: String { s("Relay fires a tiny throwaway ping through a loopback proxy to read your rate-limit windows. Off means no pings and no usage figures.",
+                                      "Relay отправляет крошечный служебный пинг через локальный прокси, чтобы читать окна лимитов. Выключено — пингов и данных об использовании не будет.") }
     var usageLimitsHint: String { s("Relay reads your 5-hour and weekly usage from Claude Code's status line — installed together with the hooks. Figures appear for Claude.ai Pro/Max after the first response in a session (run Claude via ./cc).",
                                     "Relay читает 5-часовое и недельное использование из статус-строки Claude Code — устанавливается вместе с хуками. Данные появляются для Claude.ai Pro/Max после первого ответа в сессии (запускайте Claude через ./cc).") }
     var menuBarShows: String { s("Menu bar shows", "В строке меню") }

@@ -71,7 +71,7 @@ enum HooksInstaller {
     // MARK: - Install
 
     static func install(port: Int, secret: String, approvalsEnabled: Bool = true) throws {
-        try writeScripts(port: port, secret: secret)
+        try writeScripts(port: port, secret: secret, includeApproval: approvalsEnabled)
         try withSettings { root in
             var hooks = (root["hooks"] as? [String: Any]) ?? [:]
             for event in lifecycleEvents {
@@ -89,6 +89,8 @@ enum HooksInstaller {
             root["hooks"] = hooks
             installStatusLine(in: &root)
         }
+        // Approvals off: leave no orphaned script behind (symmetry with syncApprovalHook).
+        if !approvalsEnabled { try? FileManager.default.removeItem(atPath: preToolUseScriptPath) }
         Log.info("hooks installed (port \(port), approvals \(approvalsEnabled ? "on" : "off"))")
     }
 
@@ -135,12 +137,16 @@ enum HooksInstaller {
 
     // MARK: - Script files
 
-    private static func writeScripts(port: Int, secret: String) throws {
+    private static func writeScripts(port: Int, secret: String, includeApproval: Bool) throws {
         try FileManager.default.createDirectory(at: scriptsDir, withIntermediateDirectories: true)
         try writeScript(HookScripts.render(HookScripts.eventScript, port: port, secret: secret),
                         to: eventScriptPath)
-        try writeScript(HookScripts.render(HookScripts.preToolUseScript, port: port, secret: secret),
-                        to: preToolUseScriptPath)
+        // The approval script is only written when the gate is on — otherwise it's dead
+        // weight on disk, and the settings.json entry isn't registered anyway.
+        if includeApproval {
+            try writeScript(HookScripts.render(HookScripts.preToolUseScript, port: port, secret: secret),
+                            to: preToolUseScriptPath)
+        }
         try writeScript(HookScripts.render(HookScripts.statuslineScript, port: port, secret: secret),
                         to: statuslineScriptPath)
     }
