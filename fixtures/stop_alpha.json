@@ -1,0 +1,8 @@
+{
+  "session_id": "sess-alpha",
+  "transcript_path": "/Users/you/.claude/projects/alpha/transcript.jsonl",
+  "cwd": "/Users/you/projects/alpha",
+  "permission_mode": "default",
+  "hook_event_name": "Stop",
+  "last_assistant_message": "I've finished refactoring the auth module. Do you want me to run the tests now, or should I also update the docs first?"
+}

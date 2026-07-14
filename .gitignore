@@ -1,0 +1,11 @@
+# Swift / SwiftPM
+.build/
+build/
+*.xcodeproj/xcuserdata/
+DerivedData/
+
+# macOS
+.DS_Store
+
+# Local runtime state (never commit secrets)
+relay.log

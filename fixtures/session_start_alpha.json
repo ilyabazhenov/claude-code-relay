@@ -1,0 +1,9 @@
+{
+  "session_id": "sess-alpha",
+  "transcript_path": "/Users/you/.claude/projects/alpha/transcript.jsonl",
+  "cwd": "/Users/you/projects/alpha",
+  "permission_mode": "default",
+  "hook_event_name": "SessionStart",
+  "source": "startup",
+  "model": "claude-opus-4-8"
+}

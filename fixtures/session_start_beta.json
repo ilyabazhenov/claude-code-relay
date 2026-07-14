@@ -1,0 +1,9 @@
+{
+  "session_id": "sess-beta",
+  "transcript_path": "/Users/you/.claude/projects/beta/transcript.jsonl",
+  "cwd": "/Users/you/work/beta-service",
+  "permission_mode": "default",
+  "hook_event_name": "SessionStart",
+  "source": "startup",
+  "model": "claude-opus-4-8"
+}

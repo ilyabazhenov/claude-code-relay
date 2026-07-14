@@ -1,0 +1,12 @@
+{
+  "session_id": "sess-alpha",
+  "transcript_path": "/Users/you/.claude/projects/alpha/transcript.jsonl",
+  "cwd": "/Users/you/projects/alpha",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "ls -la",
+    "description": "List files"
+  }
+}
