@@ -1,0 +1,10 @@
+# Normalize line endings for text files
+* text=auto eol=lf
+
+# Binary assets — never diff or convert
+*.icns binary
+*.png  binary
+*.dmg  binary
+
+# Keep language stats focused on the Swift app: sample payloads don't count.
+fixtures/** linguist-vendored
