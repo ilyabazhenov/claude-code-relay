@@ -3,6 +3,15 @@
     <channel>
         <title>Relay</title>
         <item>
+            <title>0.1.2</title>
+            <pubDate>Tue, 14 Jul 2026 13:29:26 +0400</pubDate>
+            <sparkle:version>12</sparkle:version>
+            <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/ilyabazhenov/claude-code-relay/releases/download/v0.1.2/Relay-0.1.2.zip" length="1936604" type="application/octet-stream" sparkle:edSignature="Fna03EvmXKJ7oYrclkdf6+4Mo1VmMmpbduT4w005qMBZC5Lyd6ARuKJymDG/UeHYcpOPysWZJeAolpH48Di2AA=="/>
+        </item>
+        <item>
             <title>0.1.1</title>
             <pubDate>Tue, 14 Jul 2026 13:21:03 +0400</pubDate>
             <sparkle:version>8</sparkle:version>
