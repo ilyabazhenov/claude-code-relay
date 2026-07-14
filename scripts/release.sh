@@ -31,7 +31,9 @@ STAGE="build/sparkle-updates"          # generate_appcast scans this dir of arch
 APPCAST="$ROOT/appcast.xml"            # committed at repo root == SUFeedURL target
 
 SHORT_VERSION="$(tr -d ' \n' < "$ROOT/VERSION")"
-ZIP_NAME="Relay-$SHORT_VERSION.zip"
+ZIP_NAME="Relay-$SHORT_VERSION.zip"          # Sparkle enclosure (in $STAGE)
+DMG_NAME="Relay-$SHORT_VERSION.dmg"          # human first-install download (in build/)
+DMG_PATH="$ROOT/build/$DMG_NAME"
 TAG="v$SHORT_VERSION"
 DOWNLOAD_PREFIX="https://github.com/$REPO_SLUG/releases/download/$TAG/"
 
@@ -60,20 +62,33 @@ echo "==> generating appcast (EdDSA-signed)"
   -o "$APPCAST" \
   "$STAGE"
 
-# 4) Generate the GitHub release notes, always including install + quarantine
+# 4) Build the human-facing .dmg from the SAME signed bundle the zip was made from, so
+#    its CFBundleVersion matches the shipped update exactly. Built into build/ (NOT $STAGE)
+#    and only after the appcast is generated, so generate_appcast never treats the dmg as a
+#    Sparkle enclosure. Sparkle updates use the zip; the dmg is just a nicer first install.
+echo "==> packaging $DMG_NAME"
+DMG_STAGING="$ROOT/build/dmg-staging"
+rm -rf "$DMG_STAGING" "$DMG_PATH"
+mkdir -p "$DMG_STAGING"
+cp -R "$APP" "$DMG_STAGING/"
+ln -s /Applications "$DMG_STAGING/Applications"
+hdiutil create -volname "Relay" -srcfolder "$DMG_STAGING" -ov -format UDZO "$DMG_PATH" >/dev/null
+rm -rf "$DMG_STAGING"
+
+# 5) Generate the GitHub release notes, always including install + quarantine
 #    instructions. First-timers land on the release page and download the .zip directly;
 #    the ad-hoc app is quarantined on download, so they need the one-time xattr step.
 #    (Sparkle updates handle quarantine themselves — no dance after the first install.)
 NOTES="$STAGE/RELEASE_NOTES-$SHORT_VERSION.md"
-sed "s/__VERSION__/$SHORT_VERSION/g; s/__ZIP__/$ZIP_NAME/g" > "$NOTES" <<'NOTES_TEMPLATE'
+sed "s/__VERSION__/$SHORT_VERSION/g; s/__DMG__/$DMG_NAME/g" > "$NOTES" <<'NOTES_TEMPLATE'
 Relay __VERSION__ — menu-bar dispatcher for Claude Code sessions, with in-app auto-update (Sparkle).
 
 <!-- Add release highlights here. -->
 
 ## Install
 
-1. Download **__ZIP__** below and unzip it.
-2. Drag **Relay.app** into `/Applications`.
+1. Download **__DMG__** below and open it.
+2. Drag **Relay** onto **Applications**.
 3. Relay is ad-hoc signed (not notarized), so macOS quarantines it on download. Clear the
    quarantine flag and launch it — run this once in Terminal:
 
@@ -85,6 +100,8 @@ Relay __VERSION__ — menu-bar dispatcher for Claude Code sessions, with in-app 
    the **first** install — Sparkle handles updates (and their quarantine) automatically.
 4. On first launch approve the **Notifications** prompt, then open Relay's menu → **Install hooks**.
 
+_(The `.zip` asset is what Sparkle downloads for auto-updates — you don't need it for a manual install.)_
+
 ## Updating
 
 Already running an earlier Relay? Do nothing — it checks daily and offers this version, or
@@ -93,13 +110,14 @@ NOTES_TEMPLATE
 
 echo
 echo "==> done."
-echo "    archive:  $STAGE/$ZIP_NAME"
-echo "    appcast:  $APPCAST"
-echo "    notes:    $NOTES"
+echo "    dmg (humans):   $DMG_PATH"
+echo "    zip (Sparkle):  $STAGE/$ZIP_NAME"
+echo "    appcast:        $APPCAST"
+echo "    notes:          $NOTES"
 echo
 echo "Next steps (publish — nothing above left the machine):"
-echo "  1. Create the GitHub release and upload the archive (notes include install steps):"
-echo "       gh release create $TAG \"$STAGE/$ZIP_NAME\" --title \"Relay $SHORT_VERSION\" --notes-file \"$NOTES\""
+echo "  1. Create the GitHub release and upload BOTH assets (notes include install steps):"
+echo "       gh release create $TAG \"$DMG_PATH\" \"$STAGE/$ZIP_NAME\" --title \"Relay $SHORT_VERSION\" --notes-file \"$NOTES\""
 echo "  2. Commit the updated appcast so SUFeedURL serves it:"
 echo "       git add appcast.xml VERSION && git commit -m \"Release $SHORT_VERSION\" && git push"
 echo
