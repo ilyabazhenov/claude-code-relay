@@ -1,0 +1,54 @@
+name: Bug report
+description: Something in Relay isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug! Please **do not** report security issues here —
+        see [SECURITY.md](../../SECURITY.md) for private reporting.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+      placeholder: When Claude stops with a question, the reply is never injected…
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: If possible, include a fixture payload or the exact hook event.
+      placeholder: |
+        1. Run `./cc`
+        2. Trigger a PreToolUse on a dangerous command
+        3. Approve from the notification
+        4. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Relay version
+      description: Settings ▸ Updates, or the `VERSION` file.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "14.5 (Sonoma)"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: >
+        From `~/.claude/relay/relay.log`. Redact the shared secret and any paths
+        you'd rather not share.
+      render: shell
+    validations:
+      required: false

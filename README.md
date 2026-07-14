@@ -1,12 +1,26 @@
 # Relay
 
+![Platform: macOS 14+](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
+![Swift 6](https://img.shields.io/badge/Swift-6-orange.svg)
+[![Latest release](https://img.shields.io/github/v/release/ilyabazhenov/claude-code-relay?sort=semver)](https://github.com/ilyabazhenov/claude-code-relay/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A menu-bar **dispatcher for Claude Code sessions** on macOS. Answer Claude's
 approval prompts and text questions — approve/deny a risky command, type a reply —
 straight from a native notification or the menu-bar icon, **without switching back to
 the terminal**.
 
-> Status: M0–M4 implemented. Skeleton, session tracking, blocking approvals, tmux
-> reply injection, and polish (quick replies, settings, focus, `.dmg`).
+## Demo
+
+<!--
+  Drop a short screen recording (≈10s: notification → Approve/Deny → typed reply
+  injected into the pane) at docs/demo.gif and uncomment the line below.
+  Capture tips: docs/README.md
+-->
+<!-- ![Relay in action](docs/demo.gif) -->
+
+> 📹 _Demo GIF coming soon — approve a command and answer Claude straight from the
+> notification, without touching the terminal._
 
 ---
 
@@ -268,6 +282,23 @@ brick Claude Code.
 - **Fail-open.** If the daemon is down or an approval times out, hooks exit
   non-blocking so Claude Code proceeds as if Relay weren't installed. These cases are
   logged to `~/.claude/relay/relay.log`.
+
+Found a security issue? Please **don't** open a public issue — see [SECURITY.md](SECURITY.md)
+for how to report it privately.
+
+---
+
+## Contributing
+
+Bug reports, ideas, and PRs are welcome. Before opening a PR please run:
+
+```bash
+swift build
+swift test
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, coding conventions, and how to
+exercise the hooks without a long real session.
 
 ---
 
