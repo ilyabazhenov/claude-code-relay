@@ -11,10 +11,20 @@ struct TokenRecord: Equatable, Codable {
     var output: Int
     var cacheCreation: Int
     var cacheRead: Int
+    /// The project (`basename(cwd)`) this turn ran in, tagged at ingest from the owning
+    /// session. Optional so records written before per-project tagging still decode — they
+    /// land in the "unknown" bucket until they age out.
+    var project: String? = nil
 
     /// All tokens the message processed. Cache reads dominate for long contexts, so the
     /// UI leans on this as "throughput" rather than a billing figure.
     var total: Int { input + output + cacheCreation + cacheRead }
+}
+
+/// One project's token throughput over a window.
+struct ProjectUsage: Equatable {
+    var project: String
+    var total: Int
 }
 
 /// Accumulates per-message token records parsed from session transcripts, so the history
@@ -49,15 +59,22 @@ final class TokenUsageStore: ObservableObject {
     // MARK: Ingest
 
     /// Parse any new assistant messages appended to `transcriptPath` since we last read it
-    /// for this session, and fold their token usage into the record series.
-    func ingest(sessionId: String, transcriptPath: String?) {
+    /// for this session, and fold their token usage into the record series. Each new record
+    /// is tagged with `project` (the owning session's `basename(cwd)`) so the breakdown can
+    /// group by project — the parser doesn't know the project, so we stamp it here.
+    func ingest(sessionId: String, transcriptPath: String?, project: String?) {
         guard let path = transcriptPath, !path.isEmpty else { return }
         let parsed = TranscriptTokens.parse(path: path, fromOffset: cursors[sessionId] ?? 0)
         guard let parsed else { return }
         cursors[sessionId] = parsed.newOffset
         persistCursors()
         guard !parsed.records.isEmpty else { return }
-        add(parsed.records)
+        let tagged = parsed.records.map { record -> TokenRecord in
+            var copy = record
+            copy.project = project
+            return copy
+        }
+        add(tagged)
     }
 
     /// Append records, prune the old, and persist. Shared by ingest and the preview seed.
@@ -79,6 +96,20 @@ final class TokenUsageStore: ObservableObject {
             totals[record.model, default: 0] += record.total
         }
         return totals.map { (model: $0.key, total: $0.value) }
+            .sorted { $0.total > $1.total }
+    }
+
+    /// Placeholder bucket for records written before per-project tagging (project == nil).
+    nonisolated static let unknownProject = ""
+
+    /// Total tokens per project since `since`, largest first. Pre-tagging records fold into
+    /// `unknownProject`. Pure so it can be unit tested.
+    nonisolated static func tokensByProject(_ records: [TokenRecord], since: Date) -> [ProjectUsage] {
+        var totals: [String: Int] = [:]
+        for record in records where record.at >= since {
+            totals[record.project ?? unknownProject, default: 0] += record.total
+        }
+        return totals.map { ProjectUsage(project: $0.key, total: $0.value) }
             .sorted { $0.total > $1.total }
     }
 

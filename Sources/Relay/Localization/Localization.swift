@@ -246,10 +246,15 @@ final class Localization: ObservableObject {
     // MARK: - Usage projection & tokens
 
     var projected100: String { s("projected 100%", "прогноз 100%") }
-    var tokensByModel: String { s("Tokens by model", "Токены по моделям") }
     var thisFiveHourWindow: String { s("this 5h window", "это 5-часовое окно") }
-    var noModelActivity: String { s("No model activity in this window yet",
-                                    "Пока нет активности моделей в этом окне") }
+    var tokenUsage: String { s("Token usage", "Токены") }
+    var groupByModel: String { s("By model", "По моделям") }
+    var groupByProject: String { s("By project", "По проектам") }
+    var periodFiveHour: String { s("5h", "5ч") }
+    var periodSevenDay: String { s("7d", "7д") }
+    var unknownProject: String { s("—", "—") }
+    var noTokenActivity: String { s("No activity in this window yet",
+                                    "Пока нет активности в этом окне") }
 
     // MARK: - Relative time ("in 2h 10m" / "in 3d" / "now")
 

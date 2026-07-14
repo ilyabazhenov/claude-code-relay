@@ -374,8 +374,11 @@ final class Daemon: ObservableObject {
 
         switch event.name {
         case .stop:
-            // Fold this turn's exact per-model token usage in from the transcript.
-            tokens.ingest(sessionId: event.sessionId, transcriptPath: event.transcriptPath)
+            // Fold this turn's exact per-model token usage in from the transcript, tagged
+            // with the owning session's project so the breakdown can group by project.
+            tokens.ingest(sessionId: event.sessionId,
+                          transcriptPath: event.transcriptPath,
+                          project: sessions.session(id: event.sessionId)?.projectName)
             // Claude is waiting for a text reply — surface a notification with a reply
             // field so the user can answer without touching the terminal.
             if let session = sessions.session(id: event.sessionId) {

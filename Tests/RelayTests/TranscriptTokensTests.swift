@@ -78,4 +78,32 @@ final class TranscriptTokensTests: XCTestCase {
         XCTAssertEqual(rows[0].total, 300)
         XCTAssertEqual(rows[1].total, 20)                  // pre-`since` record excluded
     }
+
+    func testTokensByProjectAggregatesAndSorts() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let records = [
+            TokenRecord(at: base, model: "claude-opus-4-8", input: 100, output: 100, cacheCreation: 0, cacheRead: 0, project: "relay"),
+            TokenRecord(at: base.addingTimeInterval(60), model: "claude-sonnet-5", input: 20, output: 20, cacheCreation: 0, cacheRead: 0, project: "relay"),
+            TokenRecord(at: base.addingTimeInterval(120), model: "claude-haiku-4-5", input: 5, output: 5, cacheCreation: 0, cacheRead: 0, project: "docs"),
+            TokenRecord(at: base.addingTimeInterval(-600), model: "claude-opus-4-8", input: 999, output: 999, cacheCreation: 0, cacheRead: 0, project: "relay")
+        ]
+        let rows = TokenUsageStore.tokensByProject(records, since: base)
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows[0].project, "relay")           // 240 total, largest first
+        XCTAssertEqual(rows[0].total, 240)                 // pre-`since` record excluded
+        XCTAssertEqual(rows[1].project, "docs")
+        XCTAssertEqual(rows[1].total, 10)
+    }
+
+    func testTokensByProjectBucketsUntaggedRecords() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let records = [
+            TokenRecord(at: base, model: "claude-opus-4-8", input: 50, output: 50, cacheCreation: 0, cacheRead: 0),
+            TokenRecord(at: base.addingTimeInterval(60), model: "claude-opus-4-8", input: 10, output: 10, cacheCreation: 0, cacheRead: 0, project: "relay")
+        ]
+        let rows = TokenUsageStore.tokensByProject(records, since: base)
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows[0].project, TokenUsageStore.unknownProject) // untagged folds into the placeholder bucket
+        XCTAssertEqual(rows[0].total, 100)
+    }
 }

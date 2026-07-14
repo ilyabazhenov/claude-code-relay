@@ -3,9 +3,9 @@ import SwiftUI
 /// The usage dashboard shown in the menu-bar window: the two current limits and the
 /// recent 7-day peak as metric cards, an exhaustion-projection strip, a fixed-slot bar
 /// chart of 5-hour peaks (with limit and average reference lines), and a collapsible
-/// per-model token breakdown for the current 5-hour window. Reads the live snapshot from
-/// `RateLimitStore`, completed windows and samples from its `UsageHistoryStore`, and
-/// per-model throughput from `TokenUsageStore`.
+/// token breakdown groupable by model or project over a 5-hour or 7-day window. Reads the
+/// live snapshot from `RateLimitStore`, completed windows and samples from its
+/// `UsageHistoryStore`, and exact token throughput from `TokenUsageStore`.
 struct UsageDashboard: View {
     @ObservedObject var rateLimits: RateLimitStore
     @ObservedObject var history: UsageHistoryStore
@@ -21,9 +21,18 @@ struct UsageDashboard: View {
     /// Which window the peaks chart is showing — 5-hour or weekly. The metric cards above
     /// stay fixed; only the chart below the toggle switches.
     @State private var peaksKind: UsageWindowKind = .fiveHour
-    /// Whether the per-model token breakdown is expanded. Collapsed by default so the
-    /// popover stays short until the user asks for the detail.
+    /// Whether the token breakdown is expanded. Collapsed by default so the popover stays
+    /// short until the user asks for the detail.
     @State private var showTokens = false
+    /// How the token breakdown groups its rows — by model or by project.
+    @State private var tokenGrouping: TokenGrouping = .byModel
+    /// The window the token breakdown aggregates over — the current 5-hour window or the
+    /// last 7 days. Account-wide limit percentages can't be split per project, so this
+    /// breakdown works off exact per-message token throughput instead.
+    @State private var tokenPeriod: TokenPeriod = .fiveHour
+
+    enum TokenGrouping: Hashable { case byModel, byProject }
+    enum TokenPeriod: Hashable { case fiveHour, sevenDay }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -61,57 +70,118 @@ struct UsageDashboard: View {
         }
     }
 
-    // MARK: Tokens by model
+    // MARK: Token breakdown
 
-    /// A collapsible per-model token breakdown for the current 5-hour window, parsed from
-    /// session transcripts (independent of the account-wide percentages above).
+    /// A collapsible token breakdown, groupable by model or by project and over either the
+    /// current 5-hour window or the last 7 days. Parsed from session transcripts, so it's
+    /// exact per-message throughput — independent of the account-wide percentages above,
+    /// which can't be split per project.
     @ViewBuilder private var tokensSection: some View {
-        let rows = TokenUsageStore.tokensByModel(tokens.records, since: currentFiveHourStart)
-        let grand = rows.reduce(0) { $0 + $1.total }
         VStack(alignment: .leading, spacing: 8) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) { showTokens.toggle() }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: showTokens ? "chevron.down" : "chevron.right")
-                        .font(.caption2)
-                    Text(loc.tokensByModel).font(.caption)
-                    Spacer()
+            HStack(spacing: 5) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { showTokens.toggle() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: showTokens ? "chevron.down" : "chevron.right")
+                            .font(.caption2)
+                        Text(loc.tokenUsage).font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                if showTokens {
+                    Picker("", selection: $tokenPeriod) {
+                        Text(loc.periodFiveHour).tag(TokenPeriod.fiveHour)
+                        Text(loc.periodSevenDay).tag(TokenPeriod.sevenDay)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                    .controlSize(.mini)
+                } else {
                     Text(loc.thisFiveHourWindow).font(.caption2).foregroundStyle(.tertiary)
                 }
-                .foregroundStyle(.secondary)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
 
             if showTokens {
-                if rows.isEmpty || grand == 0 {
-                    Text(loc.noModelActivity)
-                        .font(.caption).foregroundStyle(.secondary)
-                        .padding(.vertical, 4)
-                } else {
-                    ForEach(rows, id: \.model) { row in
-                        tokenRow(row.model, count: row.total, share: Double(row.total) / Double(grand))
-                    }
+                Picker("", selection: $tokenGrouping) {
+                    Text(loc.groupByModel).tag(TokenGrouping.byModel)
+                    Text(loc.groupByProject).tag(TokenGrouping.byProject)
+                }
+                .pickerStyle(.segmented).labelsHidden()
+
+                tokenRows
+            }
+        }
+    }
+
+    @ViewBuilder private var tokenRows: some View {
+        switch tokenGrouping {
+        case .byModel:
+            let rows = TokenUsageStore.tokensByModel(tokens.records, since: tokenSince)
+            let grand = rows.reduce(0) { $0 + $1.total }
+            if rows.isEmpty || grand == 0 {
+                emptyTokens
+            } else {
+                ForEach(rows, id: \.model) { row in
+                    tokenRow(tint: nil, label: Self.modelName(row.model),
+                             count: row.total, share: Double(row.total) / Double(grand))
+                }
+            }
+        case .byProject:
+            let rows = TokenUsageStore.tokensByProject(tokens.records, since: tokenSince)
+            let grand = rows.reduce(0) { $0 + $1.total }
+            if rows.isEmpty || grand == 0 {
+                emptyTokens
+            } else {
+                ForEach(rows, id: \.project) { row in
+                    tokenRow(tint: Self.projectColor(row.project),
+                             label: row.project.isEmpty ? loc.unknownProject : row.project,
+                             count: row.total, share: Double(row.total) / Double(grand))
                 }
             }
         }
     }
 
-    private func tokenRow(_ model: String, count: Int, share: Double) -> some View {
-        HStack(spacing: 10) {
-            Text(Self.modelName(model))
-                .font(.caption).frame(width: 70, alignment: .leading)
+    private var emptyTokens: some View {
+        Text(loc.noTokenActivity)
+            .font(.caption).foregroundStyle(.secondary)
+            .padding(.vertical, 4)
+    }
+
+    /// One breakdown row: an optional leading color swatch (project rows only — it doubles
+    /// as a legend so short bars stay identifiable), a label, a share bar, and the token
+    /// count. When `tint` is set it colors both the swatch and the bar; otherwise the bar
+    /// falls back to the accent color (model rows).
+    private func tokenRow(tint: Color?, label: String, count: Int, share: Double) -> some View {
+        HStack(spacing: 8) {
+            if let tint {
+                Circle().fill(tint).frame(width: 7, height: 7)
+            }
+            Text(label)
+                .font(.caption).lineLimit(1).truncationMode(.middle)
+                .frame(width: tint == nil ? 70 : 63, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.08))
-                    Capsule().fill(Color.accentColor).frame(width: max(2, geo.size.width * share))
+                    Capsule().fill(tint ?? Color.accentColor).frame(width: max(2, geo.size.width * share))
                 }
             }
             .frame(height: 6)
             Text(Self.tokenLabel(count))
                 .font(.caption).fontWeight(.medium).monospacedDigit()
                 .frame(width: 48, alignment: .trailing)
+        }
+    }
+
+    /// The window the token breakdown aggregates over, per the period toggle.
+    private var tokenSince: Date {
+        switch tokenPeriod {
+        case .fiveHour: return currentFiveHourStart
+        case .sevenDay: return Date().addingTimeInterval(-7 * 24 * 3600)
         }
     }
 
@@ -379,6 +449,38 @@ struct UsageDashboard: View {
         ]
         for entry in known where id.hasPrefix(entry.prefix) { return entry.name }
         return id.replacingOccurrences(of: "claude-", with: "")
+    }
+
+    /// A palette of distinct, dark- and light-mode-friendly hues assigned to projects so
+    /// each reads as its own color in the breakdown. Spread around the color wheel so
+    /// neighbours in the list stay easy to tell apart.
+    private static let projectPalette: [Color] = [
+        Color(red: 0.00, green: 0.48, blue: 1.00),  // blue
+        Color(red: 0.20, green: 0.65, blue: 0.98),  // azure
+        Color(red: 0.10, green: 0.78, blue: 0.80),  // teal
+        Color(red: 0.20, green: 0.78, blue: 0.35),  // green
+        Color(red: 0.60, green: 0.80, blue: 0.20),  // lime
+        Color(red: 0.95, green: 0.80, blue: 0.20),  // yellow
+        Color(red: 1.00, green: 0.62, blue: 0.04),  // orange
+        Color(red: 1.00, green: 0.48, blue: 0.30),  // coral
+        Color(red: 1.00, green: 0.30, blue: 0.35),  // red
+        Color(red: 1.00, green: 0.30, blue: 0.55),  // pink
+        Color(red: 0.92, green: 0.30, blue: 0.80),  // magenta
+        Color(red: 0.72, green: 0.38, blue: 0.95),  // purple
+        Color(red: 0.55, green: 0.45, blue: 0.98),  // violet
+        Color(red: 0.37, green: 0.40, blue: 0.92),  // indigo
+        Color(red: 0.35, green: 0.85, blue: 0.62),  // mint
+        Color(red: 0.72, green: 0.55, blue: 0.38)   // tan
+    ]
+
+    /// A stable color for a project, derived from a deterministic (launch-independent) hash
+    /// of its name so a project keeps the same color across sessions. The unknown bucket
+    /// ("") is a neutral gray, so the legacy pre-tagging pile doesn't grab a vivid hue.
+    private static func projectColor(_ name: String) -> Color {
+        guard !name.isEmpty else { return Color(red: 0.55, green: 0.55, blue: 0.53) }
+        var hash: UInt64 = 1469598103934665603            // FNV-1a offset basis
+        for byte in name.utf8 { hash = (hash ^ UInt64(byte)) &* 1099511628211 }
+        return projectPalette[Int(hash % UInt64(projectPalette.count))]
     }
 
     /// Compact token count: `1.2M`, `340K`, `512`.
