@@ -12,15 +12,22 @@ the terminal**.
 
 ## Demo
 
-<!--
-  Drop a short screen recording (≈10s: notification → Approve/Deny → typed reply
-  injected into the pane) at docs/demo.gif and uncomment the line below.
-  Capture tips: docs/README.md
--->
-<!-- ![Relay in action](docs/demo.gif) -->
+The menu-bar panel — running sessions colored by state, plus a live usage dashboard
+(5-hour / weekly limits, 7-day peak, and a projection when you're heading for the cap):
 
-> 📹 _Demo GIF coming soon — approve a command and answer Claude straight from the
-> notification, without touching the terminal._
+<p align="center">
+  <img src="docs/mockup-panel.svg" width="360" alt="Relay menu-bar panel: usage dashboard and session list">
+</p>
+
+Approve a command or answer Claude's question straight from a native notification —
+no switching back to the terminal:
+
+<p align="center">
+  <img src="docs/mockup-notifications.svg" width="380" alt="Relay notifications: approve/deny a command and reply with quick-replies">
+</p>
+
+> _Schematic mockups. A recorded GIF of the real app is coming — see
+> [docs/README.md](docs/README.md) for how it's captured._
 
 ---
 

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 316" font-family="-apple-system, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif">
+  <defs>
+    <filter id="nshadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="9" flood-color="#000000" flood-opacity="0.20"/>
+    </filter>
+    <linearGradient id="appicon" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0A84FF"/>
+      <stop offset="1" stop-color="#8C7ADB"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ===================== approval notification ===================== -->
+  <rect x="12" y="14" width="356" height="132" rx="18" fill="#FCFCFD" stroke="#EAEAEC" filter="url(#nshadow)"/>
+  <!-- app icon -->
+  <rect x="28" y="30" width="38" height="38" rx="9" fill="url(#appicon)"/>
+  <path d="M40 42 l7 7 l-7 7 M48 42 l7 7 l-7 7" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- header -->
+  <text x="78" y="44" font-size="13" font-weight="700" fill="#1D1D1F">Relay</text>
+  <text x="352" y="44" font-size="11" fill="#A1A1A6" text-anchor="end">now</text>
+  <text x="78" y="62" font-size="11" fill="#6E6E73">api-server · needs approval</text>
+  <!-- dangerous command pill -->
+  <rect x="78" y="72" width="176" height="21" rx="6" fill="#FBEAEA"/>
+  <text x="88" y="86.5" font-size="11.5" fill="#C0392B" font-family="'SF Mono', ui-monospace, Menlo, monospace">rm -rf ./build</text>
+  <text x="262" y="86.5" font-size="11" fill="#A1A1A6">Bash</text>
+  <!-- actions -->
+  <rect x="28" y="108" width="160" height="26" rx="8" fill="#F0F0F2"/>
+  <text x="108" y="125" font-size="12" font-weight="500" fill="#1D1D1F" text-anchor="middle">Deny</text>
+  <rect x="196" y="108" width="160" height="26" rx="8" fill="#0A84FF"/>
+  <text x="276" y="125" font-size="12" font-weight="600" fill="#FFFFFF" text-anchor="middle">Approve</text>
+
+  <!-- ===================== reply notification ===================== -->
+  <rect x="12" y="160" width="356" height="148" rx="18" fill="#FCFCFD" stroke="#EAEAEC" filter="url(#nshadow)"/>
+  <!-- app icon -->
+  <rect x="28" y="176" width="38" height="38" rx="9" fill="url(#appicon)"/>
+  <path d="M40 188 l7 7 l-7 7 M48 188 l7 7 l-7 7" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- header -->
+  <text x="78" y="190" font-size="13" font-weight="700" fill="#1D1D1F">Relay</text>
+  <text x="352" y="190" font-size="11" fill="#A1A1A6" text-anchor="end">now</text>
+  <text x="78" y="208" font-size="11" fill="#6E6E73">docs-site · waiting for reply</text>
+  <text x="78" y="226" font-size="12.5" fill="#1D1D1F">Which option should I take?</text>
+  <!-- reply field -->
+  <rect x="28" y="238" width="300" height="28" rx="9" fill="#F2F2F4" stroke="#E2E2E4"/>
+  <text x="40" y="256" font-size="12" fill="#A1A1A6">Type a reply…</text>
+  <circle cx="314" cy="252" r="11" fill="#0A84FF"/>
+  <path d="M314 257 l0 -9 M310.5 251 l3.5 -3.5 l3.5 3.5" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- quick replies -->
+  <text x="28" y="288" font-size="10" fill="#A1A1A6">Quick:</text>
+  <rect x="66" y="277" width="40" height="18" rx="9" fill="#EAF2FF"/>
+  <text x="86" y="290" font-size="11" fill="#0A84FF" text-anchor="middle">yes</text>
+  <rect x="112" y="277" width="66" height="18" rx="9" fill="#EAF2FF"/>
+  <text x="145" y="290" font-size="11" fill="#0A84FF" text-anchor="middle">continue</text>
+  <rect x="184" y="277" width="66" height="18" rx="9" fill="#EAF2FF"/>
+  <text x="217" y="290" font-size="11" fill="#0A84FF" text-anchor="middle">option 2</text>
+</svg>

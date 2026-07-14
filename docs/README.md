@@ -2,6 +2,19 @@
 
 This folder holds images used by the top-level `README.md`.
 
+## Schematic mockups (SVG)
+
+- `mockup-panel.svg` — the menu-bar panel: usage dashboard (5-hour / weekly / peak
+  cards, projection strip, peaks chart) and the state-colored session list.
+- `mockup-notifications.svg` — the native approval (Approve/Deny) and reply
+  (text field + quick-replies) notifications.
+
+These are hand-drawn schematics kept in sync with the SwiftUI views under
+`Sources/Relay/MenuUI/`. They use the same state colors as the app (blue working /
+orange waiting-for-reply / red waiting-for-approval / gray ended). Editing: they're
+plain SVG — open in any editor; preview by serving the folder
+(`python3 -m http.server` from `docs/`) since browsers block `file://` SVG.
+
 ## `demo.gif` — the README demo
 
 The README has a **Demo** section with a commented-out `![Relay in action](docs/demo.gif)`.
