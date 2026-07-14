@@ -123,6 +123,13 @@ struct MenuContentView: View {
                 .frame(width: 8, height: 8)
             Text("Relay")
                 .font(.headline)
+            Text("v\(updater.currentVersion)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                .help(loc.currentVersionLabel)
             Spacer()
             if let captured = rateLimits.snapshot?.capturedAt {
                 // Re-render every 30s so the "N min ago" caption stays current while the
