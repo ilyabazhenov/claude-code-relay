@@ -5,6 +5,7 @@ import AppKit
 /// and notification toggles. Edits are staged locally and applied on Save.
 struct SettingsView: View {
     @ObservedObject var daemon: Daemon
+    @ObservedObject var updater: UpdateController
     @ObservedObject private var loc = Localization.shared
 
     @State private var launchAtLogin = false
@@ -151,6 +152,25 @@ struct SettingsView: View {
                 } footer: {
                     Text(loc.hooksHint)
                 }
+
+                Section {
+                    Toggle(loc.autoCheckUpdates, isOn: $updater.automaticallyChecksForUpdates)
+                    LabeledContent(loc.currentVersionLabel) {
+                        Text(updater.currentVersion)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    LabeledContent(loc.lastCheckedLabel) {
+                        Text(lastCheckedText)
+                            .foregroundStyle(.secondary)
+                    }
+                    Button(loc.checkNow) { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                } header: {
+                    Text(loc.sectionUpdates)
+                } footer: {
+                    Text(loc.autoCheckUpdatesHint)
+                }
             }
             .formStyle(.grouped)
 
@@ -181,6 +201,14 @@ struct SettingsView: View {
         .onDisappear {
             if dockHeld { dockHeld = false; DockPresence.release() }
         }
+    }
+
+    /// "Last checked" value: a localized relative time, or "never" before the first check.
+    private var lastCheckedText: String {
+        guard let date = updater.lastUpdateCheckDate else { return loc.neverChecked }
+        let f = RelativeDateTimeFormatter()
+        f.locale = Locale(identifier: loc.lang == .ru ? "ru_RU" : "en_US")
+        return f.localizedString(for: date, relativeTo: Date())
     }
 
     /// A secondary caption used for inline hints inside multi-control sections (where a

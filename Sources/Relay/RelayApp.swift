@@ -9,7 +9,7 @@ struct RelayApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContentView(daemon: appDelegate.daemon)
+            MenuContentView(daemon: appDelegate.daemon, updater: appDelegate.updater)
         } label: {
             // Usage readout (or chevron glyph when there's no data yet).
             MenuBarLabel(daemon: appDelegate.daemon, rateLimits: appDelegate.daemon.rateLimits)
@@ -17,7 +17,7 @@ struct RelayApp: App {
         .menuBarExtraStyle(.window)
 
         Window(Localization.shared.settingsWindowTitle, id: "settings") {
-            SettingsView(daemon: appDelegate.daemon)
+            SettingsView(daemon: appDelegate.daemon, updater: appDelegate.updater)
         }
         .windowResizability(.contentMinSize)
     }
@@ -28,6 +28,7 @@ struct RelayApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let daemon = Daemon()
+    let updater = UpdateController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         daemon.start()

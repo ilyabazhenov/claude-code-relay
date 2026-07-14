@@ -110,6 +110,7 @@ final class Localization: ObservableObject {
     var hooksNotInstalled: String { s("Hooks not installed", "Хуки не установлены") }
     var installHooks: String { s("Install hooks", "Установить хуки") }
     var settingsMenu: String { s("Settings…", "Настройки…") }
+    var checkForUpdates: String { s("Check for Updates…", "Проверить обновления…") }
     var quit: String { s("Quit", "Выйти") }
 
     var hooksRemovedNote: String { s("Hooks removed from settings.json",
@@ -200,6 +201,18 @@ final class Localization: ObservableObject {
     var saved: String { s("Saved", "Сохранено") }
     var revert: String { s("Revert", "Отменить") }
     var save: String { s("Save", "Сохранить") }
+
+    // MARK: - Updates
+
+    var sectionUpdates: String { s("Updates", "Обновления") }
+    var autoCheckUpdates: String { s("Check for updates automatically",
+                                     "Проверять обновления автоматически") }
+    var autoCheckUpdatesHint: String { s("Relay checks daily in the background and notifies you when a new version is available; nothing installs without your click.",
+                                         "Relay ежедневно проверяет обновления в фоне и уведомляет о новой версии; ничего не устанавливается без вашего подтверждения.") }
+    var currentVersionLabel: String { s("Current version", "Текущая версия") }
+    var lastCheckedLabel: String { s("Last checked", "Последняя проверка") }
+    var neverChecked: String { s("never", "никогда") }
+    var checkNow: String { s("Check now", "Проверить сейчас") }
 
     // MARK: - Usage dashboard
 

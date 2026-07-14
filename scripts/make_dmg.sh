@@ -29,10 +29,6 @@ rm -rf "$STAGING" "$DMG"
 mkdir -p "$STAGING"
 cp -R "$APP" "$STAGING/"
 ln -s /Applications "$STAGING/Applications"
-# Installer for machines without notarization: strips quarantine + copies to
-# /Applications so Gatekeeper doesn't block the ad-hoc-signed app.
-cp "$ROOT/scripts/Install.command" "$STAGING/Install.command"
-chmod +x "$STAGING/Install.command"
 
 echo "==> creating $DMG"
 hdiutil create \

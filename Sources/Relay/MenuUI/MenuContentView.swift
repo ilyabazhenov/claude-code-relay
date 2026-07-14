@@ -6,6 +6,7 @@ import SwiftUI
 /// usage stats; it does not surface reply/approval cards.
 struct MenuContentView: View {
     @ObservedObject var daemon: Daemon
+    @ObservedObject var updater: UpdateController
     @ObservedObject var sessions: SessionStore
     @ObservedObject var rateLimits: RateLimitStore
     @ObservedObject var history: UsageHistoryStore
@@ -21,8 +22,9 @@ struct MenuContentView: View {
     /// when a fresh snapshot lands (`capturedAt` changes) or by a timeout fallback.
     @State private var refreshingUsage = false
 
-    init(daemon: Daemon) {
+    init(daemon: Daemon, updater: UpdateController) {
         self.daemon = daemon
+        self.updater = updater
         self.sessions = daemon.sessions
         self.rateLimits = daemon.rateLimits
         self.history = daemon.rateLimits.history
@@ -208,6 +210,8 @@ struct MenuContentView: View {
                     openWindow(id: "settings")
                     NSApp.activate(ignoringOtherApps: true)
                 }
+                Button(loc.checkForUpdates) { updater.checkForUpdates() }
+                    .disabled(!updater.canCheckForUpdates)
                 Spacer()
                 Button(loc.quit) { NSApplication.shared.terminate(nil) }
                     .keyboardShortcut("q")

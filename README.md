@@ -120,20 +120,24 @@ right-click → Open usually won't clear it either. Two ways to hand it to colle
 
 ### A) Share the `.dmg` (no Apple Developer account)
 
-The dmg ships an **`Install.command`** alongside `Relay.app`. Tell colleagues:
+Relay's users already live in a terminal (they run Claude Code via `./cc`), so the
+install is a one-liner rather than a bundled clicker. Tell colleagues:
 
-> Open `Relay.dmg`, double-click **Install.command**, and click **Open** when macOS
-> asks. It copies Relay to `/Applications`, strips the quarantine flag, and launches
-> it.
-
-Prefer the terminal? The equivalent one-liner after dragging Relay to Applications:
+> Open `Relay.dmg`, drag **Relay** onto **Applications**, then run this once to clear
+> the download quarantine and launch it:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Relay.app && open /Applications/Relay.app
 ```
 
+Without the `xattr` step, Gatekeeper blocks the ad-hoc app on another Mac with *"Relay
+is damaged and can't be opened"* (and right-click → Open usually won't clear it either).
+
 On first launch macOS asks to allow **Notifications** — approve it, or approvals and
 replies can only be answered from the menu-bar icon.
+
+Only the *first* install needs this — Sparkle updates strip quarantine themselves (see
+[Auto-update](#auto-update-sparkle)).
 
 ### B) Notarize for a one-click open (needs a Developer ID)
 
@@ -148,8 +152,53 @@ xcrun notarytool submit build/Relay.dmg --keychain-profile "AC_NOTARY" --wait
 xcrun stapler staple build/Relay.dmg
 ```
 
-A notarized dmg opens with a normal double-click on any Mac — no `Install.command`,
-no quarantine dance.
+A notarized dmg opens with a normal double-click on any Mac — no `xattr`, no
+quarantine dance.
+
+---
+
+## Auto-update (Sparkle)
+
+Relay updates itself with [Sparkle](https://sparkle-project.org). It checks a signed
+appcast once a day in the background and shows the standard *"a new version is
+available"* alert — **notify, not silent**: nothing installs until you click **Install**
+(`SUAutomaticallyUpdate` is `false`). There's also **Check for Updates…** in the menu and
+an **Updates** section in Settings (auto-check toggle, current version, last checked).
+
+Because Relay is ad-hoc signed (not notarized), the update's **EdDSA signature is the
+sole integrity anchor** — Sparkle verifies it against `SUPublicEDKey` in `Info.plist`
+before installing, and strips quarantine itself. (First install on a *new* machine still
+uses the dmg + one-time `xattr` step above; auto-update only helps already-installed
+users.)
+
+**Configuration** lives in `Resources/Info.plist`: `SUFeedURL` (the appcast URL),
+`SUPublicEDKey`, `SUScheduledCheckInterval`, `SUEnableAutomaticChecks`,
+`SUAutomaticallyUpdate`. The framework is embedded into the hand-assembled bundle by
+`scripts/build_app.sh` (copied into `Contents/Frameworks`, ad-hoc signed inside-out).
+
+### Versioning
+
+`./VERSION` holds the marketing version (`CFBundleShortVersionString`).
+`CFBundleVersion` — the monotonic number Sparkle compares releases by — is derived from
+the git commit count at build time, so **committing is what advances the build number**.
+
+### Cutting a release
+
+One-time: an EdDSA key pair must exist in your login keychain (check with
+`.build/artifacts/sparkle/Sparkle/bin/generate_keys -p`; its public half must match
+`SUPublicEDKey`). Then:
+
+```bash
+# 1) bump ./VERSION and commit (advances CFBundleVersion)
+# 2) build + zip + EdDSA-sign + regenerate appcast.xml (publishes nothing):
+scripts/release.sh
+# 3) follow the printed steps: create the GitHub release with the .zip asset,
+#    then commit appcast.xml so SUFeedURL serves it.
+```
+
+> **arm64 only.** The SwiftPM build produces an Apple-Silicon binary, so `generate_appcast`
+> marks updates `arm64`. Intel Macs won't be offered them. Build a universal binary first
+> if you need Intel coverage.
 
 ---
 
@@ -254,8 +303,11 @@ See [`fixtures/`](fixtures/) for the full set of sample payloads.
 | `Sources/Relay/MenuUI/`           | `MenuBarExtra` UI + Settings window               |
 | `hooks/`                          | Reference copies of the installed hook scripts    |
 | `fixtures/`                       | Sample hook payloads + `emit.sh` emulator         |
-| `scripts/build_app.sh`            | Build + assemble the `.app` bundle                |
+| `scripts/build_app.sh`            | Build + assemble the `.app` (embeds/signs Sparkle) |
 | `scripts/make_dmg.sh`             | Build release + package `Relay.dmg`               |
+| `scripts/release.sh`              | Zip + EdDSA-sign + regenerate `appcast.xml`       |
+| `VERSION` / `appcast.xml`         | Marketing version / Sparkle update feed           |
+| `Sources/Relay/Support/UpdateController.swift` | Sparkle updater wrapper              |
 | `cc`                              | Wrapper: run Claude Code inside tmux              |
 
 ### HTTP endpoints (all but `/health` require `X-Relay-Secret`)

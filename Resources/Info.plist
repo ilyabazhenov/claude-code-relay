@@ -25,5 +25,25 @@
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+
+    <!-- Sparkle in-app updates. -->
+    <!-- Appcast feed. Points at appcast.xml committed to the repo's main branch; the
+         enclosure URLs inside it point at GitHub Release assets. -->
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/ilyabazhenov/claude-code-relay/main/appcast.xml</string>
+    <!-- EdDSA public key. The matching private key lives in the release machine's login
+         keychain and signs every release (scripts/release.sh). Relay is ad-hoc signed and
+         not notarized, so this signature is the sole integrity anchor for updates. -->
+    <key>SUPublicEDKey</key>
+    <string>WPYI42Z1jbfBdFNmyBey6tOcbWyU1x6GGVlmn/nNY/I=</string>
+    <!-- Check daily in the background. -->
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <!-- Notify, don't silently install: Sparkle shows its standard "update available"
+         alert with Install / Later / Skip rather than swapping the app on its own. -->
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
 </dict>
 </plist>

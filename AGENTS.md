@@ -29,8 +29,9 @@ hook-скрипты (bash+curl+python3)  ──POST──►  демон Relay (
 
 - **Swift 6 + SwiftUI**, `MenuBarExtra`, таргет macOS 14+. Собирается как SwiftPM
   executable, затем скрипт заворачивает бинарь в `.app`-бандл.
-- **Никаких сторонних зависимостей.** HTTP-сервер — на `Network.framework`. Всё
-  только из SDK.
+- **Одна сторонняя зависимость — [Sparkle](https://sparkle-project.org)** (авто-апдейт,
+  см. ниже). Всё остальное — только SDK: HTTP-сервер на `Network.framework` и т.д.
+  Новые зависимости не добавляй без веской причины.
 - **Хук-скрипты — только `bash`, `curl`, `python3`.** Не добавляй `jq` или
   brew-пакеты в хуки: они должны работать на чистой macOS.
 - Строгая конкуренция Swift 6 включена. Классы, которые ловятся в `@Sendable`
@@ -43,6 +44,7 @@ hook-скрипты (bash+curl+python3)  ──POST──►  демон Relay (
 ./scripts/build_app.sh debug      # сборка + бандл build/Relay.app (ad-hoc подпись)
 ./scripts/build_app.sh release
 ./scripts/make_dmg.sh             # release + build/Relay.dmg
+./scripts/release.sh              # zip + EdDSA-подпись + regenerate appcast.xml
 ```
 
 Тестового фреймворка нет — проверка через **фикстуры** (`fixtures/`) и HTTP-эндпоинты
@@ -61,9 +63,32 @@ hook-скрипты (bash+curl+python3)  ──POST──►  демон Relay (
 | `Notifications/NotificationManager.swift` | Обёртка `UNUserNotificationCenter`: категории, экшены (Approve/Deny/быстрые ответы/текстовое поле), делегат. |
 | `Tmux/` | `TmuxInjector` (`tmux send-keys`), `ReplyCoordinator` (инъекция ответа + блокировки), `TranscriptReader` (fallback-парсинг вопроса), `TerminalFocuser` (фокус панели/терминала). |
 | `Hooks/` | `HookScripts` (шаблоны хук-скриптов — **единый источник истины**), `HooksInstaller` (безопасный merge в `~/.claude/settings.json`). |
-| `MenuUI/` | `MenuContentView` (список сессий, карточки), `SettingsView` (окно настроек). |
+| `MenuUI/` | `MenuContentView` (список сессий, карточки, «Проверить обновления…»), `SettingsView` (окно настроек, секция «Обновления»). |
 | `Support/Log.swift` | Логи в unified log + `~/.claude/relay/relay.log`. |
+| `Support/UpdateController.swift` | Обёртка `SPUStandardUpdaterController`. Владелец — `AppDelegate`. Настройки Sparkle — в `Info.plist`, автопроверка хранится в `UserDefaults` самим Sparkle (в `config.json` **не дублируем**). |
 | `main.swift` / `CLI.swift` | Точка входа; CLI `--install-hooks` / `--uninstall-hooks` до старта GUI. |
+
+## Авто-апдейт (Sparkle)
+
+- Обновления через **Sparkle**: демон Sparkle раз в сутки тянет подписанный
+  `appcast.xml` (`SUFeedURL` в `Info.plist`) и показывает штатный алерт. Режим
+  **notify, не silent** — `SUAutomaticallyUpdate=false`, ничего не ставится без клика.
+- **ad-hoc + EdDSA.** Приложение не нотаризовано, поэтому единственный якорь доверия —
+  EdDSA-подпись апдейта, сверяемая с `SUPublicEDKey`. Приватный ключ — в login-keychain
+  релизной машины (`generate_keys`), публичный — в `Info.plist`. **Не коммить приватный
+  ключ.**
+- **Встраивание фреймворка.** Бандл собирается вручную, без Xcode-фазы Embed Frameworks:
+  `build_app.sh` копирует `Sparkle.framework` в `Contents/Frameworks` и подписывает
+  ad-hoc **строго изнутри наружу** (XPC-сервисы → `Updater.app`/`Autoupdate` → фреймворк →
+  приложение). Executable несёт rpath `@executable_path/../Frameworks` (в `Package.swift`).
+  Если тронешь порядок подписи или rpath — приложение упадёт на старте или Sparkle-хелперы
+  не пройдут собственную проверку. Проверяй `codesign --verify --deep --strict`.
+- **Версии.** `CFBundleShortVersionString` ← `./VERSION`; `CFBundleVersion` ← число
+  коммитов git (монотонно, растёт с каждым коммитом) — по нему Sparkle сравнивает релизы.
+- **Релиз:** bump `./VERSION` → commit → `scripts/release.sh` (собирает, зипует, подписывает,
+  генерит `appcast.xml`; **ничего не публикует** — печатает шаги для `gh release` и коммита
+  аппкаста).
+- Только **arm64** (SwiftPM-бинарь под Apple Silicon) — для Intel нужен universal-бинарь.
 
 ## Машина состояний сессии
 
