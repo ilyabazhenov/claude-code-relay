@@ -3,6 +3,15 @@
     <channel>
         <title>Relay</title>
         <item>
+            <title>0.1.4</title>
+            <pubDate>Tue, 14 Jul 2026 21:43:28 +0400</pubDate>
+            <sparkle:version>18</sparkle:version>
+            <sparkle:shortVersionString>0.1.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/ilyabazhenov/claude-code-relay/releases/download/v0.1.4/Relay-0.1.4.zip" length="1956248" type="application/octet-stream" sparkle:edSignature="UYkVzThfChJYgPmTNNnBwSmZdUaG4XOhg8yx9qjzXLPJMuus/cofacPJNUdoGXhamJJYLSpXEwFaainy26VcBw=="/>
+        </item>
+        <item>
             <title>0.1.3</title>
             <pubDate>Tue, 14 Jul 2026 13:43:11 +0400</pubDate>
             <sparkle:version>15</sparkle:version>
@@ -19,15 +28,6 @@
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <enclosure url="https://github.com/ilyabazhenov/claude-code-relay/releases/download/v0.1.2/Relay-0.1.2.zip" length="1936604" type="application/octet-stream" sparkle:edSignature="Fna03EvmXKJ7oYrclkdf6+4Mo1VmMmpbduT4w005qMBZC5Lyd6ARuKJymDG/UeHYcpOPysWZJeAolpH48Di2AA=="/>
-        </item>
-        <item>
-            <title>0.1.1</title>
-            <pubDate>Tue, 14 Jul 2026 13:21:03 +0400</pubDate>
-            <sparkle:version>8</sparkle:version>
-            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/ilyabazhenov/claude-code-relay/releases/download/v0.1.1/Relay-0.1.1.zip" length="1936609" type="application/octet-stream" sparkle:edSignature="JApwhYxybaIGo54MEumOrK51fvG7d+GMeQndYsyqQi16KZA+lrxsUGzlvU3cYDttPqf/XOaXv6etDNShXm0BCQ=="/>
         </item>
     </channel>
 </rss>
