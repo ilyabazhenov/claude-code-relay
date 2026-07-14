@@ -60,16 +60,49 @@ echo "==> generating appcast (EdDSA-signed)"
   -o "$APPCAST" \
   "$STAGE"
 
+# 4) Generate the GitHub release notes, always including install + quarantine
+#    instructions. First-timers land on the release page and download the .zip directly;
+#    the ad-hoc app is quarantined on download, so they need the one-time xattr step.
+#    (Sparkle updates handle quarantine themselves — no dance after the first install.)
+NOTES="$STAGE/RELEASE_NOTES-$SHORT_VERSION.md"
+sed "s/__VERSION__/$SHORT_VERSION/g; s/__ZIP__/$ZIP_NAME/g" > "$NOTES" <<'NOTES_TEMPLATE'
+Relay __VERSION__ — menu-bar dispatcher for Claude Code sessions, with in-app auto-update (Sparkle).
+
+<!-- Add release highlights here. -->
+
+## Install
+
+1. Download **__ZIP__** below and unzip it.
+2. Drag **Relay.app** into `/Applications`.
+3. Relay is ad-hoc signed (not notarized), so macOS quarantines it on download. Clear the
+   quarantine flag and launch it — run this once in Terminal:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Relay.app && open /Applications/Relay.app
+   ```
+
+   Without this, macOS shows *"Relay is damaged and can't be opened."* You only need it for
+   the **first** install — Sparkle handles updates (and their quarantine) automatically.
+4. On first launch approve the **Notifications** prompt, then open Relay's menu → **Install hooks**.
+
+## Updating
+
+Already running an earlier Relay? Do nothing — it checks daily and offers this version, or
+use **Check for Updates…** in the menu. No re-download, no quarantine step.
+NOTES_TEMPLATE
+
 echo
 echo "==> done."
 echo "    archive:  $STAGE/$ZIP_NAME"
 echo "    appcast:  $APPCAST"
+echo "    notes:    $NOTES"
 echo
 echo "Next steps (publish — nothing above left the machine):"
-echo "  1. Create the GitHub release and upload the archive:"
-echo "       gh release create $TAG \"$STAGE/$ZIP_NAME\" --title \"Relay $SHORT_VERSION\" --notes \"...\""
+echo "  1. Create the GitHub release and upload the archive (notes include install steps):"
+echo "       gh release create $TAG \"$STAGE/$ZIP_NAME\" --title \"Relay $SHORT_VERSION\" --notes-file \"$NOTES\""
 echo "  2. Commit the updated appcast so SUFeedURL serves it:"
 echo "       git add appcast.xml VERSION && git commit -m \"Release $SHORT_VERSION\" && git push"
 echo
+echo "  (Edit $NOTES first if you want to add highlights.)"
 echo "  Existing installs will pick it up on their next daily check (or via"
 echo "  'Check for Updates…' in the menu)."
