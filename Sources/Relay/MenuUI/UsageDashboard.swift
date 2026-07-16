@@ -30,9 +30,21 @@ struct UsageDashboard: View {
     /// last 7 days. Account-wide limit percentages can't be split per project, so this
     /// breakdown works off exact per-message token throughput instead.
     @State private var tokenPeriod: TokenPeriod = .fiveHour
+    /// Which project rows are expanded to reveal their heaviest tool targets (culprits).
+    @State private var expandedProjects: Set<String> = []
+    /// Which reset a first click has armed, if any — a second click on the same target
+    /// performs it. Clearing history can't be undone, but a menu-bar popover is a poor host
+    /// for a confirmation dialog, so the confirm lives inline and disarms itself.
+    @State private var armedReset: ResetTarget?
 
     enum TokenGrouping: Hashable { case byModel, byProject }
     enum TokenPeriod: Hashable { case fiveHour, sevenDay }
+    /// What an armed reset would clear: the entire breakdown, or one project's history.
+    enum ResetTarget: Hashable { case all, project(String) }
+
+    /// How long an armed reset waits for its confirming click before standing down, so a
+    /// stray click never leaves a live "Reset?" button sitting in the popover.
+    private static let resetArmedDuration: Duration = .seconds(4)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -95,6 +107,7 @@ struct UsageDashboard: View {
                 Spacer()
 
                 if showTokens {
+                    if !tokens.records.isEmpty { resetAllButton }
                     Picker("", selection: $tokenPeriod) {
                         Text(loc.periodFiveHour).tag(TokenPeriod.fiveHour)
                         Text(loc.periodSevenDay).tag(TokenPeriod.sevenDay)
@@ -116,6 +129,65 @@ struct UsageDashboard: View {
                 tokenRows
             }
         }
+        .task(id: armedReset) {
+            guard let armed = armedReset else { return }
+            try? await Task.sleep(for: Self.resetArmedDuration)
+            if armedReset == armed { armedReset = nil }
+        }
+        .onChange(of: showTokens) { _, _ in armedReset = nil }
+    }
+
+    /// Wipes the whole breakdown — the escape hatch for "I fixed the project, stop showing
+    /// me the old figures". Both groupings read the same records, so one button covers them.
+    private var resetAllButton: some View {
+        resetButton(target: .all, hint: loc.resetTokensHint) {
+            tokens.resetAll()
+            expandedProjects.removeAll()
+        } label: {
+            Image(systemName: "arrow.counterclockwise").font(.system(size: 10))
+        }
+    }
+
+    /// Clears one project's history and leaves the rest — offered inside the expanded row,
+    /// where the user already went to see what that project was pulling in.
+    private func resetProjectButton(_ project: String) -> some View {
+        resetButton(target: .project(project), hint: loc.resetProjectHint) {
+            tokens.reset(project: project)
+            expandedProjects.remove(project)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.counterclockwise").font(.system(size: 9))
+                Text(loc.resetProjectStats).font(.caption2)
+            }
+        }
+    }
+
+    /// A reset control that arms on the first click and only clears on the second: while
+    /// armed it turns into a red "Reset?" in place of `label`.
+    private func resetButton<Label: View>(target: ResetTarget, hint: String,
+                                          action: @escaping () -> Void,
+                                          @ViewBuilder label: () -> Label) -> some View {
+        let armed = armedReset == target
+        return Button {
+            if armed {
+                action()
+                armedReset = nil
+            } else {
+                armedReset = target
+            }
+        } label: {
+            Group {
+                if armed {
+                    Text(loc.resetConfirm).font(.caption2).fontWeight(.medium)
+                } else {
+                    label()
+                }
+            }
+            .foregroundStyle(armed ? Self.dangerColor : Color.secondary)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(armed ? loc.resetConfirmHint : hint)
     }
 
     @ViewBuilder private var tokenRows: some View {
@@ -137,13 +209,93 @@ struct UsageDashboard: View {
             if rows.isEmpty || grand == 0 {
                 emptyTokens
             } else {
+                let vitals = Dictionary(
+                    TokenUsageStore.projectVitals(tokens.records, since: tokenSince).map { ($0.project, $0) },
+                    uniquingKeysWith: { first, _ in first })
                 ForEach(rows, id: \.project) { row in
-                    tokenRow(tint: Self.projectColor(row.project),
-                             label: row.project.isEmpty ? loc.unknownProject : row.project,
-                             count: row.total, share: Double(row.total) / Double(grand))
+                    projectRow(row: row, grand: grand, vitals: vitals[row.project])
                 }
             }
         }
+    }
+
+    /// A project breakdown row that expands on tap to reveal its heaviest tool targets —
+    /// which files and commands are pulling the most weight into the context, the concrete
+    /// culprits behind a flagged project.
+    @ViewBuilder private func projectRow(row: ProjectUsage, grand: Int,
+                                         vitals: TokenUsageStore.ProjectVitals?) -> some View {
+        let expanded = expandedProjects.contains(row.project)
+        VStack(alignment: .leading, spacing: 7) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    if expanded { expandedProjects.remove(row.project) }
+                    else { expandedProjects.insert(row.project) }
+                }
+            } label: {
+                tokenRow(tint: Self.projectColor(row.project),
+                         label: row.project.isEmpty ? loc.unknownProject : row.project,
+                         count: row.total, share: Double(row.total) / Double(grand),
+                         health: vitals?.health ?? .ok, healthTooltip: vitals.map(healthTooltip),
+                         expandable: true, expanded: expanded)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if expanded { culpritList(project: row.project) }
+        }
+    }
+
+    /// The costliest tool targets for one project over the current window, dearest first, or
+    /// a muted note when nothing crossed the "heavy" bar. Ranked by what each result cost in
+    /// re-read tokens, not by its size — the size and the turns behind that figure ride along
+    /// in the hover tooltip.
+    @ViewBuilder private func culpritList(project: String) -> some View {
+        let culprits = TokenUsageStore.topCulprits(tokens.toolEvents, records: tokens.records,
+                                                   project: project, since: tokenSince)
+        VStack(alignment: .leading, spacing: 7) {
+            if culprits.isEmpty {
+                Text(loc.noHeavyReads).font(.caption2).foregroundStyle(.tertiary)
+            } else {
+                ForEach(Array(culprits.enumerated()), id: \.offset) { _, culprit in
+                    culpritRow(culprit)
+                }
+            }
+            resetProjectButton(project)
+        }
+        .padding(.leading, 16)
+        .padding(.bottom, 2)
+    }
+
+    /// One culprit: a tool glyph, the target (file path or command, middle-truncated), a
+    /// repeat badge when it was pulled in more than once, and what it cost in re-read tokens.
+    private func culpritRow(_ culprit: Culprit) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: Self.toolIcon(culprit.tool))
+                .font(.system(size: 10)).foregroundStyle(.secondary).frame(width: 12)
+            Text(Self.culpritLabel(culprit))
+                .font(.system(size: 11, design: .monospaced))
+                .lineLimit(1).truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if culprit.count > 1 {
+                Text("\(culprit.count)×")
+                    .font(.system(size: 10, weight: .medium)).monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(Capsule().fill(Color.primary.opacity(0.08)))
+            }
+            Text(Self.tokenLabel(culprit.cost))
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .frame(width: 54, alignment: .trailing)
+        }
+        .help(loc.culpritTooltip(size: Self.byteLabel(culprit.bytes),
+                                 tokens: Self.tokenLabel(culprit.bytes / TokenUsageStore.bytesPerToken),
+                                 turns: culprit.turns))
+    }
+
+    /// The hover explanation for a flagged project row: average cache-read per turn, plus
+    /// the rise over its own baseline when a trend was measurable.
+    private func healthTooltip(_ v: TokenUsageStore.ProjectVitals) -> String {
+        let trend = v.trend.map { String(format: "%.1f×", $0) }
+        return loc.healthTooltip(avgCacheRead: Self.tokenLabel(v.avgCacheRead), trend: trend)
     }
 
     private var emptyTokens: some View {
@@ -156,8 +308,17 @@ struct UsageDashboard: View {
     /// as a legend so short bars stay identifiable), a label, a share bar, and the token
     /// count. When `tint` is set it colors both the swatch and the bar; otherwise the bar
     /// falls back to the accent color (model rows).
-    private func tokenRow(tint: Color?, label: String, count: Int, share: Double) -> some View {
+    private func tokenRow(tint: Color?, label: String, count: Int, share: Double,
+                          health: ProjectHealth = .ok, healthTooltip: String? = nil,
+                          expandable: Bool = false, expanded: Bool = false) -> some View {
         HStack(spacing: 8) {
+            if expandable {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+                    .frame(width: 9)
+            }
             if let tint {
                 Circle().fill(tint).frame(width: 7, height: 7)
             }
@@ -171,10 +332,26 @@ struct UsageDashboard: View {
                 }
             }
             .frame(height: 6)
+            healthFlag(health, tooltip: healthTooltip)
             Text(Self.tokenLabel(count))
                 .font(.caption).fontWeight(.medium).monospacedDigit()
                 .frame(width: 48, alignment: .trailing)
         }
+    }
+
+    /// A warning triangle when a project is burning tokens like a bloated context (amber for
+    /// warn, red for critical), with a hover explanation. A fixed-width slot keeps the token
+    /// counts aligned whether or not a row carries a flag.
+    @ViewBuilder private func healthFlag(_ health: ProjectHealth, tooltip: String?) -> some View {
+        Group {
+            if health != .ok {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(health == .critical ? Self.dangerColor : Self.warnColor)
+                    .help(tooltip ?? (health == .critical ? loc.healthCritical : loc.healthWarn))
+            }
+        }
+        .frame(width: 11)
     }
 
     /// The window the token breakdown aggregates over, per the period toggle.
@@ -488,6 +665,29 @@ struct UsageDashboard: View {
         if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
         if n >= 1_000 { return String(format: "%.0fK", Double(n) / 1_000) }
         return "\(n)"
+    }
+
+    /// Compact byte size: `2.3 MB`, `340 KB`, `512 B`.
+    private static func byteLabel(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.1f MB", Double(n) / 1_000_000) }
+        if n >= 1_000 { return String(format: "%.0f KB", Double(n) / 1_000) }
+        return "\(n) B"
+    }
+
+    /// SF Symbol for a culprit's tool: a document for file tools, a terminal for `Bash`,
+    /// a generic wrench for anything else.
+    private static func toolIcon(_ tool: String) -> String {
+        switch tool {
+        case "Read", "Edit", "Write", "MultiEdit", "NotebookEdit": return "doc.text"
+        case "Bash": return "terminal"
+        default: return "wrench"
+        }
+    }
+
+    /// The display label for a culprit — the file path as-is, or a command's first line so a
+    /// multi-line Bash invocation stays to one row (middle-truncation trims the rest).
+    private static func culpritLabel(_ culprit: Culprit) -> String {
+        culprit.target.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? culprit.target
     }
 
     private static func dayLabel(_ date: Date) -> String { dayFormatter.string(from: date) }

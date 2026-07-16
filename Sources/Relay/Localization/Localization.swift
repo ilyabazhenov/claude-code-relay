@@ -256,6 +256,48 @@ final class Localization: ObservableObject {
     var noTokenActivity: String { s("No activity in this window yet",
                                     "Пока нет активности в этом окне") }
 
+    // MARK: - Resetting the token breakdown
+
+    var resetTokensHint: String {
+        s("Reset the token breakdown — clears every model and project figure so tracking starts fresh from the next response.",
+          "Сбросить статистику токенов — очищает данные по всем моделям и проектам, отсчёт начнётся заново со следующего ответа.")
+    }
+    var resetProjectStats: String { s("Reset this project's stats", "Сбросить статистику проекта") }
+    var resetProjectHint: String {
+        s("Clears only this project's token history — other projects keep theirs.",
+          "Очищает историю токенов только этого проекта — остальные сохранятся.")
+    }
+    /// Second half of the two-click confirm: the armed button says this until clicked again.
+    var resetConfirm: String { s("Reset?", "Сбросить?") }
+    var resetConfirmHint: String { s("Click again to clear. This can't be undone.",
+                                     "Нажмите ещё раз, чтобы очистить. Отменить нельзя.") }
+
+    // MARK: - Project health
+
+    var healthWarn: String { s("Heavy context — burning tokens",
+                               "Тяжёлый контекст — жрёт токены") }
+    var healthCritical: String { s("Very heavy context — likely bloated",
+                                   "Очень тяжёлый контекст — вероятно раздут") }
+    /// Tooltip for a flagged project row: its average cache-read per turn, and — when there
+    /// were enough turns to judge — how much the recent turns rose over the project's baseline.
+    func healthTooltip(avgCacheRead: String, trend: String?) -> String {
+        let base = s("avg \(avgCacheRead) cache-read/turn", "в среднем \(avgCacheRead) cache-read/тёрн")
+        guard let trend else { return base }
+        return base + s(" · rising \(trend)", " · рост \(trend)")
+    }
+
+    var noHeavyReads: String { s("No heavy tool output in this window",
+                                 "Нет тяжёлых чтений в этом окне") }
+    /// Culprit-row tooltip: where the row's headline cost came from — the result's size, that
+    /// size as tokens, and the turns it sat in the context being re-read.
+    func culpritTooltip(size: String, tokens: String, turns: Int) -> String {
+        let base = s("\(size) ≈\(tokens) tokens (estimated from size)",
+                     "\(size) ≈\(tokens) токенов (оценка по размеру)")
+        guard turns > 0 else { return base }
+        return base + s(", re-read over \(turns) \(turns == 1 ? "turn" : "turns")",
+                        ", перечитано за \(turns) \(pluralRu(turns, "тёрн", "тёрна", "тёрнов"))")
+    }
+
     // MARK: - Relative time ("in 2h 10m" / "in 3d" / "now")
 
     func relativeFuture(minutes: Int) -> String {
