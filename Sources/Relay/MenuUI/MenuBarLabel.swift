@@ -8,12 +8,18 @@ import AppKit
 /// colored by its own level. When there's no usage data yet, the Relay chevron (`»`)
 /// stands in so the menu-bar item stays visible and clickable.
 ///
-/// **Rendering the image (fixes menu-bar highlight contrast):** in the calm state the
-/// image is emitted as a **template** — macOS then adapts it to light/dark and inverts it
-/// to white when the menu is open, exactly like a native menu-bar glyph. The moment
-/// there's something to flag — a usage window at/over 75% — we switch to a **colored**
-/// image so the orange/red reads. Color only appears when it earns its keep; the common
-/// case gets pixel-perfect native behavior.
+/// **Rendering the image (theme-baked, not template):** the label is always emitted as a
+/// **colored** (non-template) image. In the calm state it's baked in the primary label
+/// color for the current theme — near-black in light, near-white in dark. We do this
+/// instead of a template glyph so the item stays vibrant on an **inactive display**:
+/// macOS dims template glyphs (and menu-bar text) on unfocused screens, but leaves
+/// full-color images alone. When a usage window crosses 75% we bake orange/red instead.
+///
+/// The tradeoff: a baked color follows the *app's* `colorScheme`, not the menu bar's
+/// actual appearance. With a translucent menu bar (transparency on) over a wallpaper that
+/// fights the theme — e.g. light theme, dark wallpaper — contrast can suffer. With
+/// "Reduce transparency" on, the bar always matches the theme and this is a non-issue. We
+/// also give up the template's automatic white inversion when the menu is open.
 struct MenuBarLabel: View {
     @ObservedObject var daemon: Daemon
     @ObservedObject var rateLimits: RateLimitStore
@@ -26,14 +32,14 @@ struct MenuBarLabel: View {
         Image(nsImage: labelImage)
     }
 
-    /// The whole label, baked to one image at screen scale. Template (auto-adapting) when
-    /// calm, colored when something needs to stand out.
+    /// The whole label, baked to one image at screen scale. Always a colored (non-template)
+    /// image so it stays visible on inactive displays; primary label color when calm,
+    /// warning tints when a window needs to stand out.
     @MainActor private var labelImage: NSImage {
-        let colored = needsColor
-        let renderer = ImageRenderer(content: composite(colored: colored).environment(\.colorScheme, scheme))
+        let renderer = ImageRenderer(content: composite(colored: needsColor).environment(\.colorScheme, scheme))
         renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
         let image = renderer.nsImage ?? NSImage(size: NSSize(width: 1, height: 1))
-        image.isTemplate = !colored
+        image.isTemplate = false
         return image
     }
 
