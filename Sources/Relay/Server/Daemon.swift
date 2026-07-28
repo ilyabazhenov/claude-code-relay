@@ -27,6 +27,11 @@ final class Daemon: ObservableObject {
     /// so we never ping an idle machine. Ping-directory events are excluded.
     private(set) var lastUserActivityAt: Date?
 
+    /// Why the usage feed is currently broken, or `nil` while pings are getting through.
+    /// Published so the dashboard can say what's wrong instead of quietly showing figures
+    /// that stopped moving. Set from `recordPingOutcome`.
+    @Published private(set) var usagePingError: String?
+
     init() {
         let config = (try? ConfigStore.loadOrCreate()) ?? Config(port: 0, secret: "", dangerRules: [])
         self.config = config
@@ -165,6 +170,52 @@ final class Daemon: ObservableObject {
         guard config.effectiveUsageProxyEnabled, boundProxyPort > 0 else { return false }
         pinger?.fireNow()
         return true
+    }
+
+    /// How long the figures may sit unrefreshed — while pings are expected to be landing —
+    /// before the UI stops presenting them as current. Three missed ticks.
+    static let usageStaleAfter: TimeInterval = 15 * 60
+
+    /// Why the usage figures shouldn't be read as current, or `nil` when they're fine.
+    ///
+    /// Staleness alone isn't a fault: pings are gated on recent activity, so figures frozen
+    /// on a machine you walked away from are working as designed. We only cry stale when a
+    /// ping *should* have landed — either one is actively failing, or you're working and
+    /// nothing has come back for a while anyway.
+    func usageFeedTrouble(now: Date = Date()) -> UsageFeedTrouble? {
+        guard config.effectiveUsageProxyEnabled, isRunning else { return nil }
+        if let error = usagePingError { return .pingFailing(error) }
+        guard let active = lastUserActivityAt,
+              now.timeIntervalSince(active) <= UsagePinger.activityWindow else { return nil }
+        guard let captured = rateLimits.snapshot?.capturedAt else { return nil }
+        let elapsed = now.timeIntervalSince(captured)
+        guard elapsed > Self.usageStaleAfter else { return nil }
+        return .noReading(minutes: Int(elapsed / 60))
+    }
+
+    /// Record how a usage ping ended.
+    ///
+    /// Logging is deliberately edge-triggered rather than per-ping: a ping fires every five
+    /// minutes, so logging each failure would bury the log in identical lines, while logging
+    /// none of them is what let a 16-hour outage pass unnoticed. So we log the transition —
+    /// the first failure with its reason, a changed reason, and the recovery — and stay
+    /// quiet while the state holds.
+    ///
+    /// A Fable ping and a Haiku ping can land in either order; both feed the same flag,
+    /// which is what we want: any ping getting through means the feed is alive.
+    func recordPingOutcome(_ outcome: PingOutcome) {
+        switch outcome {
+        case .succeeded:
+            if usagePingError != nil {
+                Log.info("usage ping recovered")
+                usagePingError = nil
+            }
+        case .failed(let reason):
+            if usagePingError != reason {
+                Log.error("usage ping failing: \(reason)")
+                usagePingError = reason
+            }
+        }
     }
 
     // MARK: - Routing
@@ -308,8 +359,11 @@ final class Daemon: ObservableObject {
             "captured_at_epoch": Int(snap.capturedAt.timeIntervalSince1970),
             "five_hour_percent": snap.fiveHourPercent as Any,
             "weekly_percent": snap.weeklyPercent as Any,
+            "fable_weekly_percent": snap.fableWeeklyPercent as Any,
             "five_hour_reset_epoch": snap.fiveHourResetAt.map { Int($0.timeIntervalSince1970) } as Any,
-            "weekly_reset_epoch": snap.weeklyResetAt.map { Int($0.timeIntervalSince1970) } as Any
+            "weekly_reset_epoch": snap.weeklyResetAt.map { Int($0.timeIntervalSince1970) } as Any,
+            "fable_weekly_reset_epoch": snap.fableWeeklyResetAt.map { Int($0.timeIntervalSince1970) } as Any,
+            "ping_error": usagePingError as Any
         ])
     }
 

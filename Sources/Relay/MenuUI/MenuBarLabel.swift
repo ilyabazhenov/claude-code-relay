@@ -47,8 +47,8 @@ struct MenuBarLabel: View {
     /// threshold. Otherwise the label stays monochrome (template).
     private var needsColor: Bool {
         guard let snap = rateLimits.snapshot else { return false }
-        let five = displayMode.showsFiveHour ? (snap.fiveHourFractionFresh ?? 0) : 0
-        let weekly = displayMode.showsWeekly ? (snap.weeklyFractionFresh ?? 0) : 0
+        let five = displayMode.showsFiveHour ? (snap.fiveHourFractionDisplay ?? 0) : 0
+        let weekly = displayMode.showsWeekly ? (snap.weeklyBindingFractionDisplay ?? 0) : 0
         return five >= 0.75 || weekly >= 0.75
     }
 
@@ -69,9 +69,16 @@ struct MenuBarLabel: View {
 
     // MARK: - Usage (one line: `6% | 36%`)
 
+    /// Both windows the mode asks for, always — a window whose reset has passed shows `0`
+    /// rather than vanishing, so the label keeps its shape across a rollover.
+    ///
+    /// The weekly slot shows whichever weekly window is fuller (see
+    /// `weeklyBindingFractionDisplay`): with a separate Fable allowance there are two, only
+    /// one number fits, and the one worth knowing is the one you'll hit first. The dashboard
+    /// breaks them apart.
     private func usageRow(_ snap: RateLimitSnapshot, colored: Bool) -> some View {
-        let five = displayMode.showsFiveHour ? snap.fiveHourFractionFresh : nil
-        let weekly = displayMode.showsWeekly ? snap.weeklyFractionFresh : nil
+        let five = displayMode.showsFiveHour ? snap.fiveHourFractionDisplay : nil
+        let weekly = displayMode.showsWeekly ? snap.weeklyBindingFractionDisplay : nil
         return HStack(spacing: 4) {
             if let five { usageValue(five, colored: colored) }
             if five != nil && weekly != nil { divider }
@@ -96,8 +103,8 @@ struct MenuBarLabel: View {
     }
 
     private func hasUsage(_ snap: RateLimitSnapshot) -> Bool {
-        (displayMode.showsFiveHour && snap.fiveHourFractionFresh != nil)
-        || (displayMode.showsWeekly && snap.weeklyFractionFresh != nil)
+        (displayMode.showsFiveHour && snap.fiveHourFractionDisplay != nil)
+        || (displayMode.showsWeekly && snap.weeklyBindingFractionDisplay != nil)
     }
 
     /// Neutral until three-quarters gone, then warn (orange) and, near the cap, alarm.

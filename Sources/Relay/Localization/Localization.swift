@@ -222,6 +222,21 @@ final class Localization: ObservableObject {
     var noData: String { s("no data", "нет данных") }
     var collecting: String { s("collecting…", "сбор данных…") }
     func resetsCaption(_ relative: String) -> String { s("resets \(relative)", "сброс \(relative)") }
+    var newWindow: String { s("new window", "новое окно") }
+    var cardFableWeekly: String { s("Fable · 7d", "Fable · 7д") }
+
+    /// Shown in place of "Updated HH:MM" when the figures have gone stale, with the reason
+    /// in the tooltip. A frozen number looks exactly like a quiet one, so this says which.
+    var usageStale: String { s("data is stale", "данные устарели") }
+    func usageStalePingFailing(_ reason: String) -> String {
+        s("Usage pings are failing: \(reason)", "Пинги не проходят: \(reason)")
+    }
+    func usageStaleNoReading(minutes n: Int) -> String {
+        switch lang {
+        case .en: return "No fresh reading for \(n) min"
+        case .ru: return "Нет свежих данных \(n) \(pluralRu(n, "минуту", "минуты", "минут"))"
+        }
+    }
 
     var peaks: String { s("Peaks", "Пики") }
     var segFiveHourShort: String { s("5h", "5ч") }

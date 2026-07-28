@@ -9,44 +9,98 @@ import Combine
 /// those to the daemon. Each window may be independently absent (they only appear for
 /// Claude.ai Pro/Max after the first API response in a session), so every field is
 /// optional and the UI simply omits what it doesn't have.
+///
+/// A third window — Fable's own weekly allowance — exists on plans that meter that model
+/// separately. It is *not* reported alongside the other two: only a response from Fable
+/// itself carries `anthropic-ratelimit-unified-7d_oi-*` (Haiku and even Opus responses
+/// omit it), so it refreshes on its own, slower schedule. See `UsagePinger`.
 struct RateLimitSnapshot: Equatable, Codable {
     /// Fraction 0…1 of the 5-hour window consumed.
     var fiveHourFraction: Double?
     /// Fraction 0…1 of the weekly (7-day) window consumed.
     var weeklyFraction: Double?
+    /// Fraction 0…1 of Fable's separate weekly window, when the plan meters one.
+    var fableWeeklyFraction: Double?
     /// When the 5-hour window resets.
     var fiveHourResetAt: Date?
     /// When the weekly window resets.
     var weeklyResetAt: Date?
+    /// When Fable's weekly window resets.
+    var fableWeeklyResetAt: Date?
     /// When this snapshot was last updated.
     var capturedAt: Date
 
     init(fiveHourFraction: Double? = nil, weeklyFraction: Double? = nil,
-         fiveHourResetAt: Date? = nil, weeklyResetAt: Date? = nil, capturedAt: Date) {
+         fableWeeklyFraction: Double? = nil,
+         fiveHourResetAt: Date? = nil, weeklyResetAt: Date? = nil,
+         fableWeeklyResetAt: Date? = nil, capturedAt: Date) {
         self.fiveHourFraction = fiveHourFraction
         self.weeklyFraction = weeklyFraction
+        self.fableWeeklyFraction = fableWeeklyFraction
         self.fiveHourResetAt = fiveHourResetAt
         self.weeklyResetAt = weeklyResetAt
+        self.fableWeeklyResetAt = fableWeeklyResetAt
         self.capturedAt = capturedAt
     }
 
     var fiveHourPercent: Int? { fiveHourFraction.map { Int(($0 * 100).rounded()) } }
     var weeklyPercent: Int? { weeklyFraction.map { Int(($0 * 100).rounded()) } }
+    var fableWeeklyPercent: Int? { fableWeeklyFraction.map { Int(($0 * 100).rounded()) } }
 
-    /// The 5-hour fraction, but only while it is still meaningful: once the window's
-    /// reset time has passed the stored value is stale (usage has rolled over), so we
-    /// report `nil` rather than show a wrong number from a persisted snapshot.
-    var fiveHourFractionFresh: Double? {
-        guard let fraction = fiveHourFraction else { return nil }
-        if let reset = fiveHourResetAt, reset <= Date() { return nil }
+    // MARK: - Reading a window
+    //
+    // Every window is read three ways, and the difference matters:
+    //
+    //   `…Fresh`    — the value only while its window is genuinely still open. `nil` once
+    //                 the reset has passed. This is the "is there a live window" question,
+    //                 and history/charts must use it: a rolled-over window is over.
+    //   `…Display`  — what to *show*. Same as fresh while open, then `0`, because a window
+    //                 that reset is empty rather than unknown. Blanking it made the
+    //                 menu-bar label silently drop one of its numbers, which reads as a
+    //                 broken app rather than as a reset. Still `nil` when we have never had
+    //                 a reading at all — there is nothing to be empty.
+    //   `…RolledOver` — the value shown belongs to a new window and the stored reset time
+    //                 is in the past, so a countdown to it would be nonsense.
+    //
+    // The zero is the best available reading, not a measured one: if nothing has refreshed
+    // the snapshot since the rollover (a dead usage feed), real usage may already have
+    // climbed. It self-corrects on the next update.
+
+    /// The fraction only while its window is still open; `nil` once `reset` has passed.
+    private static func fresh(_ fraction: Double?, _ reset: Date?) -> Double? {
+        guard let fraction else { return nil }
+        if let reset, reset <= Date() { return nil }
         return fraction
     }
 
-    /// Same freshness guard for the weekly window.
-    var weeklyFractionFresh: Double? {
-        guard let fraction = weeklyFraction else { return nil }
-        if let reset = weeklyResetAt, reset <= Date() { return nil }
-        return fraction
+    /// The fraction to show: live value, `0` after a rollover, `nil` if never read.
+    private static func display(_ fraction: Double?, _ reset: Date?) -> Double? {
+        fraction == nil ? nil : (fresh(fraction, reset) ?? 0)
+    }
+
+    var fiveHourFractionFresh: Double? { Self.fresh(fiveHourFraction, fiveHourResetAt) }
+    var weeklyFractionFresh: Double? { Self.fresh(weeklyFraction, weeklyResetAt) }
+    var fableWeeklyFractionFresh: Double? { Self.fresh(fableWeeklyFraction, fableWeeklyResetAt) }
+
+    var fiveHourFractionDisplay: Double? { Self.display(fiveHourFraction, fiveHourResetAt) }
+    var weeklyFractionDisplay: Double? { Self.display(weeklyFraction, weeklyResetAt) }
+    var fableWeeklyFractionDisplay: Double? { Self.display(fableWeeklyFraction, fableWeeklyResetAt) }
+
+    var fiveHourRolledOver: Bool { fiveHourFraction != nil && fiveHourFractionFresh == nil }
+    var weeklyRolledOver: Bool { weeklyFraction != nil && weeklyFractionFresh == nil }
+    var fableWeeklyRolledOver: Bool { fableWeeklyFraction != nil && fableWeeklyFractionFresh == nil }
+
+    /// The weekly window you will actually run out of first — the fuller of the overall
+    /// allowance and Fable's own. The menu bar has room for one weekly number, and the
+    /// useful one is whichever binds: showing 49% while Fable sits at 64% would understate
+    /// how close the next wall is. The dashboard still breaks both out.
+    var weeklyBindingFractionDisplay: Double? {
+        switch (weeklyFractionDisplay, fableWeeklyFractionDisplay) {
+        case let (overall?, fable?): return max(overall, fable)
+        case let (overall?, nil):    return overall
+        case let (nil, fable?):      return fable
+        case (nil, nil):             return nil
+        }
     }
 }
 
@@ -112,11 +166,12 @@ final class RateLimitStore: ObservableObject {
 
     /// Ingest a usage update forwarded by the status-line script. Windows are merged:
     /// a window that isn't present in this update keeps its previous value (Claude Code
-    /// may report the two windows independently), so we never blank a good figure.
-    /// Percentages are 0…100.
+    /// may report the windows independently, and Fable's arrives only on the rarer Fable
+    /// ping), so we never blank a good figure. Percentages are 0…100.
     func ingestStatusline(fiveHourPercent: Double?, fiveHourReset: Date?,
-                          weeklyPercent: Double?, weeklyReset: Date?) {
-        guard fiveHourPercent != nil || weeklyPercent != nil else { return }
+                          weeklyPercent: Double?, weeklyReset: Date?,
+                          fableWeeklyPercent: Double? = nil, fableWeeklyReset: Date? = nil) {
+        guard fiveHourPercent != nil || weeklyPercent != nil || fableWeeklyPercent != nil else { return }
         var snap = snapshot ?? RateLimitSnapshot(capturedAt: Date())
         if let five = fiveHourPercent {
             snap.fiveHourFraction = Self.clamp01(five / 100)
@@ -125,6 +180,10 @@ final class RateLimitStore: ObservableObject {
         if let week = weeklyPercent {
             snap.weeklyFraction = Self.clamp01(week / 100)
             snap.weeklyResetAt = weeklyReset
+        }
+        if let fable = fableWeeklyPercent {
+            snap.fableWeeklyFraction = Self.clamp01(fable / 100)
+            snap.fableWeeklyResetAt = fableWeeklyReset
         }
         snap.capturedAt = Date()
         snapshot = snap
@@ -140,13 +199,18 @@ final class RateLimitStore: ObservableObject {
         history.recordSample(fiveHour: snap.fiveHourFraction, weekly: snap.weeklyFraction, at: now)
 
         Log.info("usage: 5h \(snap.fiveHourPercent.map { "\($0)%" } ?? "—") · "
-                 + "7d \(snap.weeklyPercent.map { "\($0)%" } ?? "—")")
+                 + "7d \(snap.weeklyPercent.map { "\($0)%" } ?? "—")"
+                 + (snap.fableWeeklyPercent.map { " · 7d-fable \($0)%" } ?? ""))
     }
 
     /// Ingest usage from the `anthropic-ratelimit-*` response headers captured by the
     /// usage proxy (off Relay's own periodic ping). The unified `-utilization` value is
     /// already a 0…1 fraction and `-reset` is an epoch; we convert and feed the same path
     /// as the status line, so snapshot, persistence, and history all update together.
+    ///
+    /// `7d_oi` is Fable's own weekly window. Only a Fable response carries it — a Haiku or
+    /// Opus response simply omits the header — so most ingests leave that window untouched
+    /// and it keeps its last reading.
     func ingestHeaders(_ headers: [String: String]) {
         func fraction(_ prefix: String) -> Double? {
             guard let raw = headers["\(prefix)-utilization"] else { return nil }
@@ -161,11 +225,14 @@ final class RateLimitStore: ObservableObject {
         }
         let five = fraction("anthropic-ratelimit-unified-5h")
         let week = fraction("anthropic-ratelimit-unified-7d")
+        let fable = fraction("anthropic-ratelimit-unified-7d_oi")
         ingestStatusline(
             fiveHourPercent: five.map { $0 * 100 },
             fiveHourReset: reset("anthropic-ratelimit-unified-5h"),
             weeklyPercent: week.map { $0 * 100 },
-            weeklyReset: reset("anthropic-ratelimit-unified-7d")
+            weeklyReset: reset("anthropic-ratelimit-unified-7d"),
+            fableWeeklyPercent: fable.map { $0 * 100 },
+            fableWeeklyReset: reset("anthropic-ratelimit-unified-7d_oi")
         )
     }
 

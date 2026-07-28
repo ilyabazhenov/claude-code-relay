@@ -50,7 +50,10 @@ struct MenuContentView: View {
             footer
         }
         .padding(12)
-        .frame(width: 360)
+        // Wide enough for four metric cards to keep their labels and reset captions intact.
+        // At 360 a fourth card squeezed every one of them to ~78pt and they all truncated
+        // to ellipses ("5 ЧАС…", "сброс через…"), which costs more than the extra width does.
+        .frame(width: 440)
         .onAppear { hooksInstalled = HooksInstaller.isInstalled() }
     }
 
@@ -135,12 +138,37 @@ struct MenuContentView: View {
                 // Re-render every 30s so the "N min ago" caption stays current while the
                 // window is open; falls back to an absolute clock time once it ages out.
                 TimelineView(.periodic(from: captured, by: 30)) { ctx in
-                    Text(loc.lastSync(syncValue(captured, now: ctx.date)))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    syncCaption(captured: captured, now: ctx.date)
                 }
             }
             refreshButton
+        }
+    }
+
+    /// The header's right-hand caption. Normally "Updated HH:MM" — but when the feed is in
+    /// trouble it turns into a warning with the reason in the tooltip. Figures that stopped
+    /// updating look identical to figures that simply haven't changed, and reading the
+    /// second as the first is exactly how an outage goes unnoticed for a day.
+    @ViewBuilder private func syncCaption(captured: Date, now: Date) -> some View {
+        if let trouble = daemon.usageFeedTrouble(now: now) {
+            HStack(spacing: 3) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                Text(loc.usageStale)
+            }
+            .font(.caption2)
+            .foregroundStyle(.orange)
+            .help(troubleDetail(trouble))
+        } else {
+            Text(loc.lastSync(syncValue(captured, now: now)))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func troubleDetail(_ trouble: UsageFeedTrouble) -> String {
+        switch trouble {
+        case .pingFailing(let reason): return loc.usageStalePingFailing(reason)
+        case .noReading(let minutes):  return loc.usageStaleNoReading(minutes: minutes)
         }
     }
 

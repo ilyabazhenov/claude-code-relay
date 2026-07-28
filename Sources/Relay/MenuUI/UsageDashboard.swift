@@ -371,21 +371,35 @@ struct UsageDashboard: View {
     // MARK: Metric cards
 
     private var metricCards: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             metricCard(
                 label: loc.cardFiveHour,
                 icon: "clock",
-                value: rateLimits.snapshot?.fiveHourFractionFresh,
-                caption: rateLimits.snapshot?.fiveHourResetAt.map { loc.resetsCaption(relative($0, from: Date())) },
+                value: rateLimits.snapshot?.fiveHourFractionDisplay,
+                caption: cardCaption(reset: rateLimits.snapshot?.fiveHourResetAt,
+                                     rolledOver: rateLimits.snapshot?.fiveHourRolledOver ?? false),
                 identity: Self.identityFiveHour
             )
             metricCard(
                 label: loc.cardWeekly,
                 icon: "calendar",
-                value: rateLimits.snapshot?.weeklyFractionFresh,
-                caption: rateLimits.snapshot?.weeklyResetAt.map { loc.resetsCaption(relative($0, from: Date())) },
+                value: rateLimits.snapshot?.weeklyFractionDisplay,
+                caption: cardCaption(reset: rateLimits.snapshot?.weeklyResetAt,
+                                     rolledOver: rateLimits.snapshot?.weeklyRolledOver ?? false),
                 identity: Self.identityWeekly
             )
+            // Only plans that meter Fable separately report this window, so the card appears
+            // only once we've actually seen a reading — no empty placeholder for everyone else.
+            if rateLimits.snapshot?.fableWeeklyFractionDisplay != nil {
+                metricCard(
+                    label: loc.cardFableWeekly,
+                    icon: "sparkles",
+                    value: rateLimits.snapshot?.fableWeeklyFractionDisplay,
+                    caption: cardCaption(reset: rateLimits.snapshot?.fableWeeklyResetAt,
+                                         rolledOver: rateLimits.snapshot?.fableWeeklyRolledOver ?? false),
+                    identity: Self.identityFable
+                )
+            }
             metricCard(
                 label: loc.cardPeak7d,
                 icon: "flame.fill",
@@ -394,6 +408,15 @@ struct UsageDashboard: View {
                 identity: Self.identityPeak
             )
         }
+    }
+
+    /// The caption under a limit card. Normally a countdown to the reset — but once that
+    /// reset has passed we're showing the *new* window's empty value, so counting down to a
+    /// moment in the past ("resets now", forever) would be nonsense. Say it's a new window
+    /// instead; the real countdown returns with the next reading.
+    private func cardCaption(reset: Date?, rolledOver: Bool) -> String? {
+        if rolledOver { return loc.newWindow }
+        return reset.map { loc.resetsCaption(relative($0, from: Date())) }
     }
 
     /// A compact card: an icon + uppercased label, big percentage, a caption, and a thin
@@ -571,9 +594,11 @@ struct UsageDashboard: View {
 
     // MARK: Card color scheme (hybrid: identity hue + warn/danger escalation)
 
-    /// Per-card identity hues, so the three cards are distinguishable at a glance.
+    /// Per-card identity hues, so the cards are distinguishable at a glance. Fable's sits
+    /// next to the weekly violet — they're both weekly windows — but reads as its own.
     static let identityFiveHour = Color.accentColor                          // blue
     static let identityWeekly = Color(red: 0.55, green: 0.48, blue: 0.86)    // violet
+    static let identityFable = Color(red: 0.85, green: 0.42, blue: 0.68)     // magenta
     static let identityPeak = Color(red: 0.93, green: 0.63, blue: 0.23)      // amber
     /// Escalation colors shared by all cards.
     static let warnColor = Color(red: 0.93, green: 0.63, blue: 0.23)         // amber

@@ -123,4 +123,126 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(fiveWindows.count, 1, "only the 5h window closed")
         XCTAssertTrue(weekWindows.isEmpty, "weekly window is still open")
     }
+
+    // MARK: - Display values
+
+    /// A window whose reset has passed is empty, not unknown: the freshness guard still
+    /// reports `nil` (nothing to feed history with), but the display value falls to `0` so
+    /// the menu-bar label keeps both of its numbers instead of losing one.
+    func testExpiredWindowDisplaysZeroRatherThanNothing() {
+        let past = Date().addingTimeInterval(-3600)
+        let future = Date().addingTimeInterval(3 * 24 * 3600)
+        let snap = RateLimitSnapshot(fiveHourFraction: 0.28, weeklyFraction: 0.42,
+                                     fiveHourResetAt: past, weeklyResetAt: future,
+                                     capturedAt: Date().addingTimeInterval(-4 * 3600))
+
+        XCTAssertNil(snap.fiveHourFractionFresh)
+        XCTAssertEqual(snap.fiveHourFractionDisplay, 0)
+        XCTAssertTrue(snap.fiveHourRolledOver)
+
+        XCTAssertEqual(snap.weeklyFractionDisplay ?? -1, 0.42, accuracy: 0.0001)
+        XCTAssertFalse(snap.weeklyRolledOver)
+    }
+
+    /// A window we have never had a reading for stays absent — there is nothing to be
+    /// empty, and inventing a `0%` for it would be a made-up number.
+    func testNeverSeenWindowHasNoDisplayValue() {
+        let snap = RateLimitSnapshot(fiveHourFraction: nil, weeklyFraction: 0.42,
+                                     fiveHourResetAt: nil,
+                                     weeklyResetAt: Date().addingTimeInterval(3 * 24 * 3600),
+                                     capturedAt: Date())
+
+        XCTAssertNil(snap.fiveHourFractionDisplay)
+        XCTAssertFalse(snap.fiveHourRolledOver)
+        XCTAssertEqual(snap.weeklyFractionDisplay ?? -1, 0.42, accuracy: 0.0001)
+    }
+
+    // MARK: - Fable's separate weekly window
+
+    /// `7d_oi` is Fable's own weekly allowance, and it arrives only on a Fable response.
+    func testFableWeeklyParsedFromHeaders() {
+        let store = RateLimitStore(directory: tempDir())
+        let reset = String(Int(Date().addingTimeInterval(3 * 24 * 3600).timeIntervalSince1970))
+
+        store.ingestHeaders([
+            "anthropic-ratelimit-unified-5h-utilization": "0.08",
+            "anthropic-ratelimit-unified-5h-reset": String(Int(Date().addingTimeInterval(3600).timeIntervalSince1970)),
+            "anthropic-ratelimit-unified-7d-utilization": "0.49",
+            "anthropic-ratelimit-unified-7d-reset": reset,
+            "anthropic-ratelimit-unified-7d_oi-utilization": "0.64",
+            "anthropic-ratelimit-unified-7d_oi-reset": reset
+        ])
+
+        XCTAssertEqual(store.snapshot?.fableWeeklyPercent, 64)
+        XCTAssertEqual(store.snapshot?.weeklyPercent, 49)
+    }
+
+    /// The `7d` prefix is a prefix of `7d_oi`. Parsing must not confuse the two, or the
+    /// overall weekly window would pick up Fable's number (or vice versa).
+    func testPlainWeeklyIsNotConfusedWithFableWindow() {
+        let store = RateLimitStore(directory: tempDir())
+        store.ingestHeaders([
+            "anthropic-ratelimit-unified-7d-utilization": "0.49",
+            "anthropic-ratelimit-unified-7d_oi-utilization": "0.64"
+        ])
+
+        XCTAssertEqual(store.snapshot?.weeklyPercent, 49)
+        XCTAssertEqual(store.snapshot?.fableWeeklyPercent, 64)
+    }
+
+    /// Haiku pings carry no `7d_oi` header at all. Those far more frequent ingests must
+    /// leave the last Fable reading alone rather than blanking it between Fable pings.
+    func testHaikuPingKeepsLastFableReading() {
+        let store = RateLimitStore(directory: tempDir())
+        let reset = String(Int(Date().addingTimeInterval(3 * 24 * 3600).timeIntervalSince1970))
+
+        store.ingestHeaders([
+            "anthropic-ratelimit-unified-7d-utilization": "0.49",
+            "anthropic-ratelimit-unified-7d-reset": reset,
+            "anthropic-ratelimit-unified-7d_oi-utilization": "0.64",
+            "anthropic-ratelimit-unified-7d_oi-reset": reset
+        ])
+        // …a later Haiku ping: same two windows, no Fable header.
+        store.ingestHeaders([
+            "anthropic-ratelimit-unified-7d-utilization": "0.51",
+            "anthropic-ratelimit-unified-7d-reset": reset
+        ])
+
+        XCTAssertEqual(store.snapshot?.weeklyPercent, 51, "the overall window moved")
+        XCTAssertEqual(store.snapshot?.fableWeeklyPercent, 64, "Fable's held its last reading")
+    }
+
+    /// The menu bar has room for one weekly number, so it shows whichever window binds.
+    func testMenuBarWeeklyUsesTheFullerWindow() {
+        let future = Date().addingTimeInterval(3 * 24 * 3600)
+        let snap = RateLimitSnapshot(weeklyFraction: 0.49, fableWeeklyFraction: 0.64,
+                                     weeklyResetAt: future, fableWeeklyResetAt: future,
+                                     capturedAt: Date())
+        XCTAssertEqual(snap.weeklyBindingFractionDisplay ?? -1, 0.64, accuracy: 0.0001)
+
+        // …and the other way round, when the overall allowance is the tighter one.
+        let flipped = RateLimitSnapshot(weeklyFraction: 0.80, fableWeeklyFraction: 0.30,
+                                        weeklyResetAt: future, fableWeeklyResetAt: future,
+                                        capturedAt: Date())
+        XCTAssertEqual(flipped.weeklyBindingFractionDisplay ?? -1, 0.80, accuracy: 0.0001)
+    }
+
+    /// On a plan without a separate Fable allowance the binding value is just the weekly one
+    /// — the menu bar must not lose its number for everyone who never sees `7d_oi`.
+    func testMenuBarWeeklyWorksWithoutAFableWindow() {
+        let snap = RateLimitSnapshot(weeklyFraction: 0.42,
+                                     weeklyResetAt: Date().addingTimeInterval(3 * 24 * 3600),
+                                     capturedAt: Date())
+        XCTAssertEqual(snap.weeklyBindingFractionDisplay ?? -1, 0.42, accuracy: 0.0001)
+    }
+
+    /// A reading with no reset time at all can't expire, so it displays as-is.
+    func testReadingWithoutResetDisplaysItsValue() {
+        let snap = RateLimitSnapshot(fiveHourFraction: 0.5, weeklyFraction: nil,
+                                     fiveHourResetAt: nil, weeklyResetAt: nil,
+                                     capturedAt: Date())
+
+        XCTAssertEqual(snap.fiveHourFractionDisplay ?? -1, 0.5, accuracy: 0.0001)
+        XCTAssertFalse(snap.fiveHourRolledOver)
+    }
 }
