@@ -118,8 +118,8 @@ final class RateLimitStore: ObservableObject {
     /// reset time so the history shows correct start/end labels.
     private static func duration(_ kind: UsageWindowKind) -> TimeInterval {
         switch kind {
-        case .fiveHour: return 5 * 3600
-        case .weekly:   return 7 * 24 * 3600
+        case .fiveHour:            return 5 * 3600
+        case .weekly, .fableWeekly: return 7 * 24 * 3600
         }
     }
 
@@ -132,6 +132,7 @@ final class RateLimitStore: ObservableObject {
     }
     private var openFive: OpenWindow?
     private var openWeek: OpenWindow?
+    private var openFable: OpenWindow?
 
 
     /// Where the last snapshot is cached so the menu bar can show figures immediately on
@@ -153,6 +154,8 @@ final class RateLimitStore: ObservableObject {
             // mid-window doesn't drop the peak we'd accumulated.
             openFive = Self.reopen(fraction: saved.fiveHourFractionFresh, reset: saved.fiveHourResetAt, kind: .fiveHour)
             openWeek = Self.reopen(fraction: saved.weeklyFractionFresh, reset: saved.weeklyResetAt, kind: .weekly)
+            openFable = Self.reopen(fraction: saved.fableWeeklyFractionFresh,
+                                    reset: saved.fableWeeklyResetAt, kind: .fableWeekly)
         }
     }
 
@@ -196,7 +199,12 @@ final class RateLimitStore: ObservableObject {
                 fraction: fiveHourPercent.map { Self.clamp01($0 / 100) }, reset: fiveHourReset, now: now)
         advance(&openWeek, kind: .weekly,
                 fraction: weeklyPercent.map { Self.clamp01($0 / 100) }, reset: weeklyReset, now: now)
-        history.recordSample(fiveHour: snap.fiveHourFraction, weekly: snap.weeklyFraction, at: now)
+        // Fable's window only advances on the ingests that actually carry it (a Fable ping);
+        // `advance` no-ops on a nil fraction, so the frequent Haiku ingests leave it alone.
+        advance(&openFable, kind: .fableWeekly,
+                fraction: fableWeeklyPercent.map { Self.clamp01($0 / 100) }, reset: fableWeeklyReset, now: now)
+        history.recordSample(fiveHour: snap.fiveHourFraction, weekly: snap.weeklyFraction,
+                             fableWeekly: snap.fableWeeklyFraction, at: now)
 
         Log.info("usage: 5h \(snap.fiveHourPercent.map { "\($0)%" } ?? "—") · "
                  + "7d \(snap.weeklyPercent.map { "\($0)%" } ?? "—")"

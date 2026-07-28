@@ -241,6 +241,7 @@ final class Localization: ObservableObject {
     var peaks: String { s("Peaks", "Пики") }
     var segFiveHourShort: String { s("5h", "5ч") }
     var segWeekShort: String { s("Week", "Нед") }
+    var segFableShort: String { s("Fable", "Fable") }
     var waitingFirstReading: String { s("Waiting for the first usage reading…",
                                         "Ожидание первых данных…") }
 

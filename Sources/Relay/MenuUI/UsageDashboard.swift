@@ -465,10 +465,11 @@ struct UsageDashboard: View {
     // MARK: Peaks chart
 
     @ViewBuilder private var peaksSection: some View {
-        let completed = historyWindows(peaksKind)
-        let current = currentFraction(peaksKind)
+        let kind = effectivePeaksKind
+        let completed = historyWindows(kind)
+        let current = currentFraction(kind)
         let slots = chartSlots(completed: completed, current: current,
-                               currentReset: currentReset(peaksKind), kind: peaksKind)
+                               currentReset: currentReset(kind), kind: kind)
         let avg = average(completed)
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
@@ -476,6 +477,11 @@ struct UsageDashboard: View {
                 Picker("", selection: $peaksKind) {
                     Text(loc.segFiveHourShort).tag(UsageWindowKind.fiveHour)
                     Text(loc.segWeekShort).tag(UsageWindowKind.weekly)
+                    // Only offered on plans that meter Fable separately — everyone else
+                    // would get a segment that can never hold anything.
+                    if hasFableHistory {
+                        Text(loc.segFableShort).tag(UsageWindowKind.fableWeekly)
+                    }
                 }
                 .pickerStyle(.segmented).controlSize(.mini).fixedSize()
                 Spacer()
@@ -515,6 +521,20 @@ struct UsageDashboard: View {
 
     // MARK: Data shaping
 
+    /// Whether a Fable segment has anything behind it: a live reading, or windows already
+    /// closed out. Once either exists it stays true, so the segment doesn't flicker.
+    private var hasFableHistory: Bool {
+        rateLimits.snapshot?.fableWeeklyFractionDisplay != nil
+            || history.windows.contains { $0.kind == .fableWeekly }
+    }
+
+    /// The kind the chart actually draws. A selection can outlive its segment — pick Fable,
+    /// then load a profile that has no such window — and a picker bound to a tag that isn't
+    /// offered draws nothing at all, so fall back rather than render an empty chart.
+    private var effectivePeaksKind: UsageWindowKind {
+        (peaksKind == .fableWeekly && !hasFableHistory) ? .fiveHour : peaksKind
+    }
+
     /// Completed windows of `kind`, oldest first. No age cutoff — the chart caps to its
     /// slot count, and weekly windows are sparse enough that a time window would hide them.
     private func historyWindows(_ kind: UsageWindowKind) -> [UsageWindow] {
@@ -530,19 +550,24 @@ struct UsageDashboard: View {
             .max { $0.peakFraction < $1.peakFraction }
     }
 
-    /// The live fraction of the still-open window of `kind`, if fresh.
+    /// The live fraction of the still-open window of `kind`, if fresh. Deliberately the
+    /// *fresh* reading, not the display one: this drives the chart's trailing "current" bar,
+    /// and a window whose reset has passed belongs in history, not as a live bar labelled
+    /// with an interval that already ended.
     private func currentFraction(_ kind: UsageWindowKind) -> Double? {
         switch kind {
-        case .fiveHour: return rateLimits.snapshot?.fiveHourFractionFresh
-        case .weekly:   return rateLimits.snapshot?.weeklyFractionFresh
+        case .fiveHour:    return rateLimits.snapshot?.fiveHourFractionFresh
+        case .weekly:      return rateLimits.snapshot?.weeklyFractionFresh
+        case .fableWeekly: return rateLimits.snapshot?.fableWeeklyFractionFresh
         }
     }
 
     /// The reset time of the still-open window of `kind`.
     private func currentReset(_ kind: UsageWindowKind) -> Date? {
         switch kind {
-        case .fiveHour: return rateLimits.snapshot?.fiveHourResetAt
-        case .weekly:   return rateLimits.snapshot?.weeklyResetAt
+        case .fiveHour:    return rateLimits.snapshot?.fiveHourResetAt
+        case .weekly:      return rateLimits.snapshot?.weeklyResetAt
+        case .fableWeekly: return rateLimits.snapshot?.fableWeeklyResetAt
         }
     }
 
@@ -734,7 +759,7 @@ struct UsageDashboard: View {
             else if cal.isDateInYesterday(start) { day = loc.yesterdayShort }
             else { day = Self.dayFormatter.string(from: start) }
             return "\(day) \(Self.hourFormatter.string(from: start))–\(Self.hourFormatter.string(from: end))"
-        case .weekly:
+        case .weekly, .fableWeekly:
             return "\(Self.dayFormatter.string(from: start)) – \(Self.dayFormatter.string(from: end))"
         }
     }

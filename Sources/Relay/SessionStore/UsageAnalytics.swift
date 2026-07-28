@@ -51,8 +51,9 @@ enum UsageAnalytics {
 
     private static func fraction(_ sample: UsageSample, _ kind: UsageWindowKind) -> Double? {
         switch kind {
-        case .fiveHour: return sample.fiveHour
-        case .weekly:   return sample.weekly
+        case .fiveHour:    return sample.fiveHour
+        case .weekly:      return sample.weekly
+        case .fableWeekly: return sample.fableWeekly
         }
     }
 

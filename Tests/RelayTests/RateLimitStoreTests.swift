@@ -212,6 +212,48 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(store.snapshot?.fableWeeklyPercent, 64, "Fable's held its last reading")
     }
 
+    /// Fable's window closes out into history like the others when its reset rolls forward.
+    func testFableWeeklyRollsOverIntoHistory() {
+        let store = RateLimitStore(directory: tempDir())
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let week = 7.0 * 24 * 3600
+        let reset1 = base.addingTimeInterval(2 * 24 * 3600)
+        let reset2 = reset1.addingTimeInterval(week)
+
+        store.ingestStatusline(fiveHourPercent: nil, fiveHourReset: nil,
+                               weeklyPercent: nil, weeklyReset: nil,
+                               fableWeeklyPercent: 64, fableWeeklyReset: reset1)
+        store.ingestStatusline(fiveHourPercent: nil, fiveHourReset: nil,
+                               weeklyPercent: nil, weeklyReset: nil,
+                               fableWeeklyPercent: 3, fableWeeklyReset: reset2)
+
+        let fable = store.history.windows.filter { $0.kind == .fableWeekly }
+        XCTAssertEqual(fable.count, 1)
+        XCTAssertEqual(fable[0].peakFraction, 0.64, accuracy: 0.0001)
+        XCTAssertEqual(fable[0].endedAt, reset1)
+        XCTAssertEqual(fable[0].startedAt, reset1.addingTimeInterval(-week))
+    }
+
+    /// The frequent Haiku ingests carry no Fable reading. They must not advance — let alone
+    /// close — Fable's window, or its history would fill with spurious entries.
+    func testHaikuIngestsDoNotDisturbTheFableWindow() {
+        let store = RateLimitStore(directory: tempDir())
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let weekReset = base.addingTimeInterval(2 * 24 * 3600)
+
+        store.ingestStatusline(fiveHourPercent: 10, fiveHourReset: base.addingTimeInterval(3600),
+                               weeklyPercent: 49, weeklyReset: weekReset,
+                               fableWeeklyPercent: 64, fableWeeklyReset: weekReset)
+        for percent in [11.0, 12.0, 13.0] {
+            store.ingestStatusline(fiveHourPercent: percent, fiveHourReset: base.addingTimeInterval(3600),
+                                   weeklyPercent: 49, weeklyReset: weekReset)
+        }
+
+        XCTAssertTrue(store.history.windows.filter { $0.kind == .fableWeekly }.isEmpty,
+                      "Fable's window is still open — nothing should have closed it")
+        XCTAssertEqual(store.snapshot?.fableWeeklyPercent, 64)
+    }
+
     /// The menu bar has room for one weekly number, so it shows whichever window binds.
     func testMenuBarWeeklyUsesTheFullerWindow() {
         let future = Date().addingTimeInterval(3 * 24 * 3600)

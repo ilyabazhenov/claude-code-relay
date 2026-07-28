@@ -373,7 +373,8 @@ final class Daemon: ObservableObject {
             [
                 "at_epoch": Int(sample.at.timeIntervalSince1970),
                 "five_hour": sample.fiveHour as Any,
-                "weekly": sample.weekly as Any
+                "weekly": sample.weekly as Any,
+                "fable_weekly": sample.fableWeekly as Any
             ]
         }
         let windows = rateLimits.history.windows.map { window -> [String: Any] in

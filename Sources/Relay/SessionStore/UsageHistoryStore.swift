@@ -1,10 +1,14 @@
 import Foundation
 import Combine
 
-/// The two independent usage limits Claude Code reports.
-enum UsageWindowKind: String, Codable {
+/// The independent usage limits Claude Code reports. `fableWeekly` is Fable's own weekly
+/// allowance, which only plans that meter that model separately have; it runs alongside
+/// `weekly` rather than inside it. `CaseIterable` on purpose — code that walks the kinds
+/// must pick up a new one automatically, or history for it would be quietly discarded.
+enum UsageWindowKind: String, Codable, CaseIterable {
     case fiveHour
     case weekly
+    case fableWeekly
 }
 
 /// A single point-in-time reading of the account's usage limits. Fed by the same
@@ -19,6 +23,17 @@ struct UsageSample: Equatable, Codable {
     var fiveHour: Double?
     /// Fraction 0…1 of the weekly window consumed at `at`, if known.
     var weekly: Double?
+    /// Fraction 0…1 of Fable's weekly window at `at`, if known. Absent from every sample
+    /// written before that window was tracked, and it refreshes on a slower cadence than
+    /// the other two, so this is the last reading rather than a fresh one per sample.
+    var fableWeekly: Double?
+
+    init(at: Date, fiveHour: Double? = nil, weekly: Double? = nil, fableWeekly: Double? = nil) {
+        self.at = at
+        self.fiveHour = fiveHour
+        self.weekly = weekly
+        self.fableWeekly = fableWeekly
+    }
 }
 
 /// A completed usage window, closed out when its reset time rolls over. `peakFraction`
@@ -99,7 +114,7 @@ final class UsageHistoryStore: ObservableObject {
     /// "real" one) and drop the rest. Legitimate gaps between windows are preserved.
     static func sanitized(_ windows: [UsageWindow]) -> [UsageWindow] {
         var kept: [UsageWindow] = []
-        for kind in [UsageWindowKind.fiveHour, .weekly] {
+        for kind in UsageWindowKind.allCases {
             let ordered = windows.filter { $0.kind == kind }.sorted { $0.startedAt < $1.startedAt }
             var acc: [UsageWindow] = []
             for window in ordered {
@@ -120,12 +135,14 @@ final class UsageHistoryStore: ObservableObject {
     /// Append a usage reading, subject to throttling. Returns whether a sample was
     /// actually stored (useful for tests). Old samples are pruned relative to `at`.
     @discardableResult
-    func recordSample(fiveHour: Double?, weekly: Double?, at: Date) -> Bool {
-        guard fiveHour != nil || weekly != nil else { return false }
-        if let last = samples.last, !Self.shouldRecord(previous: last, fiveHour: fiveHour, weekly: weekly, at: at) {
+    func recordSample(fiveHour: Double?, weekly: Double?, fableWeekly: Double? = nil, at: Date) -> Bool {
+        guard fiveHour != nil || weekly != nil || fableWeekly != nil else { return false }
+        if let last = samples.last,
+           !Self.shouldRecord(previous: last, fiveHour: fiveHour, weekly: weekly,
+                              fableWeekly: fableWeekly, at: at) {
             return false
         }
-        samples.append(UsageSample(at: at, fiveHour: fiveHour, weekly: weekly))
+        samples.append(UsageSample(at: at, fiveHour: fiveHour, weekly: weekly, fableWeekly: fableWeekly))
         prune(now: at)
         persistSamples()
         return true
@@ -144,11 +161,14 @@ final class UsageHistoryStore: ObservableObject {
 
     /// Record when a fraction moved enough, or enough time elapsed. A brand-new window
     /// (fraction dropped vs. the previous sample) always passes so the reset shows up.
-    private static func shouldRecord(previous: UsageSample, fiveHour: Double?, weekly: Double?, at: Date) -> Bool {
+    private static func shouldRecord(previous: UsageSample, fiveHour: Double?, weekly: Double?,
+                                     fableWeekly: Double?, at: Date) -> Bool {
         if at.timeIntervalSince(previous.at) >= minSampleInterval { return true }
         let fiveDelta = delta(previous.fiveHour, fiveHour)
         let weekDelta = delta(previous.weekly, weekly)
+        let fableDelta = delta(previous.fableWeekly, fableWeekly)
         return fiveDelta >= minFractionDelta || weekDelta >= minFractionDelta
+            || fableDelta >= minFractionDelta
     }
 
     /// Absolute change between two optional fractions; `0` when either is missing.
