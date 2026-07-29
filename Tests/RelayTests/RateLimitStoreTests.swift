@@ -254,28 +254,20 @@ final class RateLimitStoreTests: XCTestCase {
         XCTAssertEqual(store.snapshot?.fableWeeklyPercent, 64)
     }
 
-    /// The menu bar has room for one weekly number, so it shows whichever window binds.
-    func testMenuBarWeeklyUsesTheFullerWindow() {
+    /// The menu bar's weekly slot is the overall allowance and nothing else — a fuller Fable
+    /// window must not take the slot over, in either direction.
+    func testMenuBarWeeklyIgnoresTheFableWindow() {
         let future = Date().addingTimeInterval(3 * 24 * 3600)
         let snap = RateLimitSnapshot(weeklyFraction: 0.49, fableWeeklyFraction: 0.64,
                                      weeklyResetAt: future, fableWeeklyResetAt: future,
                                      capturedAt: Date())
-        XCTAssertEqual(snap.weeklyBindingFractionDisplay ?? -1, 0.64, accuracy: 0.0001)
+        XCTAssertEqual(snap.weeklyFractionDisplay ?? -1, 0.49, accuracy: 0.0001)
 
         // …and the other way round, when the overall allowance is the tighter one.
         let flipped = RateLimitSnapshot(weeklyFraction: 0.80, fableWeeklyFraction: 0.30,
                                         weeklyResetAt: future, fableWeeklyResetAt: future,
                                         capturedAt: Date())
-        XCTAssertEqual(flipped.weeklyBindingFractionDisplay ?? -1, 0.80, accuracy: 0.0001)
-    }
-
-    /// On a plan without a separate Fable allowance the binding value is just the weekly one
-    /// — the menu bar must not lose its number for everyone who never sees `7d_oi`.
-    func testMenuBarWeeklyWorksWithoutAFableWindow() {
-        let snap = RateLimitSnapshot(weeklyFraction: 0.42,
-                                     weeklyResetAt: Date().addingTimeInterval(3 * 24 * 3600),
-                                     capturedAt: Date())
-        XCTAssertEqual(snap.weeklyBindingFractionDisplay ?? -1, 0.42, accuracy: 0.0001)
+        XCTAssertEqual(flipped.weeklyFractionDisplay ?? -1, 0.80, accuracy: 0.0001)
     }
 
     /// A reading with no reset time at all can't expire, so it displays as-is.

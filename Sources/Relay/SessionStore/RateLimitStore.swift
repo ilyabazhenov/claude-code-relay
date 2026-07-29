@@ -90,18 +90,6 @@ struct RateLimitSnapshot: Equatable, Codable {
     var weeklyRolledOver: Bool { weeklyFraction != nil && weeklyFractionFresh == nil }
     var fableWeeklyRolledOver: Bool { fableWeeklyFraction != nil && fableWeeklyFractionFresh == nil }
 
-    /// The weekly window you will actually run out of first — the fuller of the overall
-    /// allowance and Fable's own. The menu bar has room for one weekly number, and the
-    /// useful one is whichever binds: showing 49% while Fable sits at 64% would understate
-    /// how close the next wall is. The dashboard still breaks both out.
-    var weeklyBindingFractionDisplay: Double? {
-        switch (weeklyFractionDisplay, fableWeeklyFractionDisplay) {
-        case let (overall?, fable?): return max(overall, fable)
-        case let (overall?, nil):    return overall
-        case let (nil, fable?):      return fable
-        case (nil, nil):             return nil
-        }
-    }
 }
 
 /// Holds the most recent rate-limit snapshot and publishes it to the UI. Fed by the
